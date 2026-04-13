@@ -12,7 +12,6 @@ attribute vec3 pointB;
 uniform mat4 modelMatrix;
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
-uniform mat4 uInverseModelViewMatrix;
 uniform mat4 shadowViewMatrix;
 uniform mat4 shadowProjectionMatrix;
 uniform float uWidth;
@@ -40,9 +39,9 @@ void main() {
   vec4 mvPosition = vec4(pt, currentPoint.z, 1.0);
   gl_Position = projectionMatrix * mvPosition;
 
-  vec4 undo = uInverseModelViewMatrix * mvPosition;
   across = position.y;
-  vLightNDC = depthScaleMatrix * shadowProjectionMatrix * shadowViewMatrix * modelMatrix * undo;
+  vec4 worldPoint = modelMatrix * vec4(mix(pointA, pointB, position.x), 1.0);
+  vLightNDC = depthScaleMatrix * shadowProjectionMatrix * shadowViewMatrix * worldPoint;
 }
 `;
 
@@ -64,10 +63,17 @@ vec3 normal = vec3(0.0, 0.0, 1.0);
 
 void main() {
     vec3 lightPos = vLightNDC.xyz / vLightNDC.w;
-    float bias = 0.0001;
+    float bias = 0.002;
     float depth = lightPos.z - bias;
-    float occluder = unpackRGBA(texture2D(tShadow, lightPos.xy));
-    float shadow = mix(0.6, 1.0, step(depth, occluder));
+    float texelSize = 1.0 / 2048.0;
+    float lit = 0.0;
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            float d = unpackRGBA(texture2D(tShadow, lightPos.xy + vec2(x, y) * texelSize));
+            lit += step(depth, d);
+        }
+    }
+    float shadow = mix(0.6, 1.0, lit / 9.0);
 
     vec3 highlight = normalize(vec3(0.0, across * 2., 0.4));
     float outline = dot(normal, highlight);
@@ -90,7 +96,6 @@ uniform float uWidth;
 uniform mat4 modelMatrix;
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
-uniform mat4 uInverseModelViewMatrix;
 uniform mat4 shadowViewMatrix;
 uniform mat4 shadowProjectionMatrix;
 
@@ -127,9 +132,9 @@ void main() {
 
   gl_Position = projectionMatrix * mvPosition;
 
-  vec4 undo = uInverseModelViewMatrix * mvPosition;
   across = (position.x + position.y) * 0.5 * sigma;
-  vLightNDC = depthScaleMatrix * shadowProjectionMatrix * shadowViewMatrix * modelMatrix * undo;
+  vec4 worldPoint = modelMatrix * vec4(pointB, 1.0);
+  vLightNDC = depthScaleMatrix * shadowProjectionMatrix * shadowViewMatrix * worldPoint;
 }
 `;
 
@@ -439,13 +444,12 @@ function init(yarnData: any, canvas: HTMLCanvasElement, resetCamera = true) {
   });
 }
 
-function setMainUniforms(program: any, viewMatrix: any, projMatrix: any, inverseViewMatrix: any, color: any, diameter: any) {
+function setMainUniforms(program: any, viewMatrix: any, projMatrix: any, color: any, diameter: any) {
   const u = program.uniformLocations;
   gl.useProgram(program.program);
   gl.uniformMatrix4fv(u.modelMatrix, false, IDENTITY);
   gl.uniformMatrix4fv(u.modelViewMatrix, false, viewMatrix);
   gl.uniformMatrix4fv(u.projectionMatrix, false, projMatrix);
-  gl.uniformMatrix4fv(u.uInverseModelViewMatrix, false, inverseViewMatrix);
   gl.uniformMatrix4fv(u.shadowViewMatrix, false, shadowViewMatrix);
   gl.uniformMatrix4fv(u.shadowProjectionMatrix, false, shadowProjectionMatrix);
   gl.uniform1f(u.uWidth, diameter);
@@ -468,7 +472,6 @@ function draw() {
   const aspect = canvas.clientWidth / canvas.clientHeight;
   const projMatrix = camera.projection(aspect);
   const viewMatrix = camera.viewMatrix;
-  const inverseViewMatrix = Mat4.inverse(viewMatrix);
 
   // Shadow pass — render depth into shadowFB
   gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFB);
@@ -498,12 +501,12 @@ function draw() {
   gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
 
   for (const yarn of yarns) {
-    setMainUniforms(segmentProgram, viewMatrix, projMatrix, inverseViewMatrix, yarn.color, yarn.diameter);
+    setMainUniforms(segmentProgram, viewMatrix, projMatrix, yarn.color, yarn.diameter);
     gl.uniform1i(segmentProgram.uniformLocations.tShadow, 0);
     gl.bindVertexArray(yarn.segmentVAO);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, yarn.segmentCount);
 
-    setMainUniforms(joinProgram, viewMatrix, projMatrix, inverseViewMatrix, yarn.color, yarn.diameter);
+    setMainUniforms(joinProgram, viewMatrix, projMatrix, yarn.color, yarn.diameter);
     gl.uniform1i(joinProgram.uniformLocations.tShadow, 0);
     gl.bindVertexArray(yarn.joinVAO);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, yarn.joinCount);
