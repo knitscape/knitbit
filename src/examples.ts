@@ -222,6 +222,89 @@ return {
 };`;
 }
 
+function floatJacquard(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+
+// Two-color jacquard: each pair of rows uses a different yarn.
+// Needles that should show the other color get MISS (yarn floats behind).
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  const colorBlock = Math.floor(row / 2) % 2; // alternates every 2 rows
+  yarnFeeder.push(colorBlock + 1);
+
+  for (let col = 0; col < w; col++) {
+    // Checkerboard: 2x2 blocks
+    const inBlock = (Math.floor(col / 2) + Math.floor(row / 2)) % 2 === 0;
+    ops.push(inBlock ? Op.FKNIT : Op.MISS);
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  palette: ["#264653", "#e9c46a"],
+};`;
+}
+
+function tuckStitch(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+
+// Tuck stitch texture: tucks accumulate loops on selected needles,
+// creating a bumpy, textured fabric.
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  yarnFeeder.push(1);
+
+  for (let col = 0; col < w; col++) {
+    // Tuck every 3rd needle, offset each row pair for a brick pattern
+    const offset = Math.floor(row / 2) % 3;
+    ops.push((col + offset) % 3 === 0 ? Op.FTUCK : Op.FKNIT);
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  palette: ["#f4a261"],
+};`;
+}
+
+function birdseye(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+
+// Bird's eye backing: two-color tuck pattern.
+// Each color tucks on alternating needles, swapping every 2 rows.
+// Creates a dense, double-faced fabric with small color dots.
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  const colorPhase = Math.floor(row / 2) % 2;
+  yarnFeeder.push(colorPhase + 1);
+
+  for (let col = 0; col < w; col++) {
+    const tuckPos = (col + colorPhase) % 2 === 0;
+    ops.push(tuckPos ? Op.FTUCK : Op.FKNIT);
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  palette: ["#2a9d8f", "#e76f51"],
+};`;
+}
+
 export const EXAMPLES: Example[] = [
   {
     name: "Stockinette 10\u00d710",
@@ -262,5 +345,20 @@ export const EXAMPLES: Example[] = [
     name: "Chevron Lace 12\u00d720",
     description: "Lace with eyelets forming a V/chevron pattern",
     code: chevronLace(12, 20),
+  },
+  {
+    name: "Float Jacquard 10\u00d716",
+    description: "Two-color checkerboard using misses for yarn floats",
+    code: floatJacquard(10, 16),
+  },
+  {
+    name: "Tuck Texture 10\u00d716",
+    description: "Brick-pattern tuck stitch for bumpy texture",
+    code: tuckStitch(10, 16),
+  },
+  {
+    name: "Bird's Eye 10\u00d716",
+    description: "Two-color tuck pattern creating small color dots",
+    code: birdseye(10, 16),
   },
 ];
