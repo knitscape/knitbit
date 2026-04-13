@@ -92,6 +92,136 @@ return {
 };`;
 }
 
+function eyeletLace(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+const racking = [];
+
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  yarnFeeder.push(1);
+  const phase = row % 4;
+
+  if (phase === 2) {
+    // Transfer every 4th stitch to back bed, offset by 1
+    racking.push(1);
+    for (let col = 0; col < w; col++) {
+      ops.push(col % 4 === 1 ? Op.FTB : Op.MISS);
+    }
+  } else if (phase === 3) {
+    // Return loops to front bed (now shifted one needle right)
+    racking.push(0);
+    for (let col = 0; col < w; col++) {
+      ops.push(col % 4 === 2 ? Op.BTF : Op.MISS);
+    }
+  } else {
+    racking.push(0);
+    for (let col = 0; col < w; col++) {
+      ops.push(Op.FKNIT);
+    }
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  racking,
+  palette: ["#a8dadc"],
+};`;
+}
+
+function diagonalLace(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+const racking = [];
+
+let eyeletPos = 1;
+
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  yarnFeeder.push(1);
+  const phase = row % 4;
+
+  if (phase === 2) {
+    // Transfer one stitch to back bed
+    racking.push(1);
+    for (let col = 0; col < w; col++) {
+      ops.push(col === eyeletPos ? Op.FTB : Op.MISS);
+    }
+  } else if (phase === 3) {
+    // Return loop to front bed, shifted right
+    racking.push(0);
+    for (let col = 0; col < w; col++) {
+      ops.push(col === eyeletPos + 1 ? Op.BTF : Op.MISS);
+    }
+    eyeletPos = (eyeletPos + 1) % (w - 1);
+  } else {
+    racking.push(0);
+    for (let col = 0; col < w; col++) {
+      ops.push(Op.FKNIT);
+    }
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  racking,
+  palette: ["#e8d5b7"],
+};`;
+}
+
+function chevronLace(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const repeat = Math.floor(w / 2);
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+const racking = [];
+
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  yarnFeeder.push(1);
+  const section = Math.floor(row / 4) % repeat;
+  const phase = row % 4;
+
+  if (phase === 2) {
+    // Transfer two stitches symmetrically toward center
+    racking.push(1);
+    for (let col = 0; col < w; col++) {
+      ops.push(col === section || col === w - 1 - section
+        ? Op.FTB : Op.MISS);
+    }
+  } else if (phase === 3) {
+    // Return loops to front bed
+    racking.push(0);
+    for (let col = 0; col < w; col++) {
+      ops.push(col === section + 1 || col === w - section
+        ? Op.BTF : Op.MISS);
+    }
+  } else {
+    racking.push(0);
+    for (let col = 0; col < w; col++) {
+      ops.push(Op.FKNIT);
+    }
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  racking,
+  palette: ["#c8b6e2"],
+};`;
+}
+
 export const EXAMPLES: Example[] = [
   {
     name: "Stockinette 10\u00d710",
@@ -117,5 +247,20 @@ export const EXAMPLES: Example[] = [
     name: "Striped Rib 50\u00d750",
     description: "1\u00d71 rib with two-color stripes, 50\u00d750",
     code: stripedRib(50, 50),
+  },
+  {
+    name: "Eyelet Lace 10\u00d716",
+    description: "Simple lace with a row of eyelets every 4 rows",
+    code: eyeletLace(10, 16),
+  },
+  {
+    name: "Diagonal Lace 10\u00d720",
+    description: "Lace with eyelets stepping diagonally across the fabric",
+    code: diagonalLace(10, 20),
+  },
+  {
+    name: "Chevron Lace 12\u00d720",
+    description: "Lace with eyelets forming a V/chevron pattern",
+    code: chevronLace(12, 20),
   },
 ];

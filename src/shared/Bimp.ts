@@ -1,4 +1,4 @@
-export type Vec2 = [number, number];
+import type { Vec2 } from "../math/Vec2";
 
 export interface BimpJSON {
   width: number;

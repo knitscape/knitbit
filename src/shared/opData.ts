@@ -1,6 +1,14 @@
-import { Op } from "./stitches";
+export enum Op {
+  MISS = 0,
+  FKNIT = 1,
+  FTUCK = 2,
+  BKNIT = 3,
+  BTUCK = 4,
+  FTB = 5,
+  BTF = 6,
+}
 
-export type ColorMode = "yarn" | "operation";
+export const BACK_OPS = new Set([Op.BKNIT, Op.BTUCK, Op.BTF]);
 
 export interface SymbolData {
   pathdata?: string;
@@ -9,8 +17,6 @@ export interface SymbolData {
   stroke?: string;
   description: string;
 }
-
-export const BACK_OPS = new Set([Op.BKNIT, Op.BTUCK, Op.BTF]);
 
 // Paths made in https://yqnn.github.io/svg-path-editor/
 export const SYMBOL_DATA: Record<number, SymbolData> = {

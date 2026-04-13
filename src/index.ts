@@ -44,38 +44,18 @@ function setState(patch: Partial<AppState>) {
 
 function renderChart() {
   if (!lastProgram) return;
-  const canvasOp = document.getElementById(
-    "chart-canvas-op"
+  const canvas = document.getElementById(
+    "chart-canvas"
   ) as HTMLCanvasElement | null;
-  const canvasYarn = document.getElementById(
-    "chart-canvas-yarn"
-  ) as HTMLCanvasElement | null;
-  if (!canvasOp || !canvasYarn) return;
+  if (!canvas) return;
 
-  const w = lastProgram.width * state.cellSize;
-  const h = lastProgram.height * state.cellSize;
-
-  canvasOp.width = w;
-  canvasOp.height = h;
   drawChart(
-    canvasOp,
-    "operation",
+    canvas,
     lastProgram.ops,
     lastProgram.yarnFeeder,
+    lastProgram.direction,
+    lastProgram.racking,
     lastProgram.palette,
-    state.cellSize,
-    state.cellSize
-  );
-
-  canvasYarn.width = w;
-  canvasYarn.height = h;
-  drawChart(
-    canvasYarn,
-    "yarn",
-    lastProgram.ops,
-    lastProgram.yarnFeeder,
-    lastProgram.palette,
-    state.cellSize,
     state.cellSize
   );
 }

@@ -1,4 +1,4 @@
-import { Vec3 } from "../shared/Vec3";
+import { Vec3 } from "../math/Vec3";
 import type { NodeType, ResolvedSegment } from "./types";
 
 export function yarnRelaxation(

@@ -5,8 +5,8 @@ import type {
   SegmentType,
   YarnSegments,
 } from "./types";
-import { Vec2 } from "../shared/Vec2";
-import { Vec3 } from "../shared/Vec3";
+import { Vec2 } from "../math/Vec2";
+import { Vec3 } from "../math/Vec3";
 
 // ─── Layout: convert topology nodes to 3D positions ──────────────────────────
 //

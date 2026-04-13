@@ -62,21 +62,8 @@ export function view(state: AppState, handlers: ViewHandlers) {
             id="chart-pane"
             class="flex flex-col overflow-hidden min-h-0 bg-[var(--base1)] [border-top:1px_solid_var(--base3)] relative">
             <div
-              class="flex-1 overflow-auto p-3 flex flex-wrap items-start gap-4">
-              <div class="flex flex-col gap-[0.3rem]">
-                <div
-                  class="text-[0.7rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
-                  operation
-                </div>
-                <canvas id="chart-canvas-op" class="block"></canvas>
-              </div>
-              <div class="flex flex-col gap-[0.3rem]">
-                <div
-                  class="text-[0.7rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
-                  yarn
-                </div>
-                <canvas id="chart-canvas-yarn" class="block"></canvas>
-              </div>
+              class="flex-1 overflow-auto p-3">
+              <canvas id="chart-canvas" class="block"></canvas>
             </div>
             <div class="absolute bottom-2 right-2 flex gap-[2px] z-10">
               <button

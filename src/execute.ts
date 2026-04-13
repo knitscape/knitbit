@@ -1,5 +1,5 @@
 import { Bimp } from "./shared/Bimp";
-import { Op } from "./shared/stitches";
+import { Op } from "./shared/opData";
 import type { KnittingProgram } from "./simulation/types";
 
 export function runScript(code: string): KnittingProgram {

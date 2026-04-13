@@ -1,27 +1,10 @@
+import { Vec3 } from "./Vec3";
+
 interface Segment {
   a: number[];
   b: number[];
   c: number[];
   d: number[];
-}
-
-function dist3(a: number[], b: number[]): number {
-  const dx = a[0] - b[0],
-    dy = a[1] - b[1],
-    dz = a[2] - b[2];
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
-
-function add3(a: number[], b: number[]): number[] {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-}
-
-function sub3(a: number[], b: number[]): number[] {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-}
-
-function scale3(v: number[], s: number): number[] {
-  return [v[0] * s, v[1] * s, v[2] * s];
 }
 
 function catmullRom(
@@ -31,9 +14,9 @@ function catmullRom(
   p3: number[],
   tension = 0
 ): Segment {
-  const t01 = dist3(p0, p1);
-  const t12 = dist3(p1, p2);
-  const t23 = dist3(p2, p3);
+  const t01 = Vec3.distance(p0, p1);
+  const t12 = Vec3.distance(p1, p2);
+  const t23 = Vec3.distance(p2, p3);
 
   const m1 = [
     (1 - tension) *
@@ -66,16 +49,22 @@ function catmullRom(
   ];
 
   return {
-    a: add3(add3(scale3(sub3(p1, p2), 2), m1), m2),
-    b: sub3(sub3(sub3(scale3(sub3(p1, p2), -3), m1), m1), m2),
+    a: Vec3.add(Vec3.add(Vec3.scale(Vec3.subtract(p1, p2), 2), m1), m2),
+    b: Vec3.subtract(
+      Vec3.subtract(Vec3.subtract(Vec3.scale(Vec3.subtract(p1, p2), -3), m1), m1),
+      m2
+    ),
     c: [...m1],
     d: [...p1],
   };
 }
 
 function pointInSegment(seg: Segment, t: number): number[] {
-  return add3(
-    add3(add3(scale3(seg.a, t * t * t), scale3(seg.b, t * t)), scale3(seg.c, t)),
+  return Vec3.add(
+    Vec3.add(
+      Vec3.add(Vec3.scale(seg.a, t * t * t), Vec3.scale(seg.b, t * t)),
+      Vec3.scale(seg.c, t)
+    ),
     seg.d
   );
 }

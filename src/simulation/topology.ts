@@ -1,4 +1,4 @@
-import { Op } from "../shared/stitches";
+import { Op } from "../shared/opData";
 import type { KnittingProgram, TopologyNode, TopologyResult } from "./types";
 
 interface Loop {
