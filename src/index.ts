@@ -15,7 +15,7 @@ let state: AppState = {
   code: EXAMPLES[0].code,
   cellSize: 20,
   statusText: "Press Run or Ctrl+Enter to generate the chart.",
-  statusClass: "",
+  statusClass: "text-[color:var(--base7)]",
   activeExample: 0,
   simState: "idle",
   topologyMs: 0,
@@ -121,14 +121,14 @@ function runWithCode(code: string) {
     const h = result.stitches.height;
     setState({
       statusText: `OK \u2014 ${w}\u00d7${h}`,
-      statusClass: "ok",
+      statusClass: "text-green-400",
     });
 
     renderChart();
     initSimulation();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    setState({ statusText: `Error: ${msg}`, statusClass: "error" });
+    setState({ statusText: `Error: ${msg}`, statusClass: "text-red-400" });
   }
 }
 

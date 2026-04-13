@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /home/hannah/Code/knitstack/*.*)",
+      "Bash(npm list:*)",
+      "Bash(npx vite:*)"
+    ]
+  }
+}
