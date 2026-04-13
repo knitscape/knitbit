@@ -15,9 +15,11 @@ uniform mat4 projectionMatrix;
 uniform mat4 shadowViewMatrix;
 uniform mat4 shadowProjectionMatrix;
 uniform float uWidth;
+uniform vec3 uLightPos;
 
 varying float across;
 varying vec4 vLightNDC;
+varying float vFacing;
 
 const mat4 depthScaleMatrix = mat4(
     0.5, 0, 0, 0,
@@ -42,6 +44,9 @@ void main() {
   across = position.y;
   vec4 worldPoint = modelMatrix * vec4(mix(pointA, pointB, position.x), 1.0);
   vLightNDC = depthScaleMatrix * shadowProjectionMatrix * shadowViewMatrix * worldPoint;
+
+  vec3 lightDirView = normalize((modelViewMatrix * vec4(uLightPos, 1.0)).xyz - mvPosition.xyz);
+  vFacing = lightDirView.z;
 }
 `;
 
@@ -54,6 +59,7 @@ uniform sampler2D tShadow;
 
 varying float across;
 varying vec4 vLightNDC;
+varying float vFacing;
 
 float unpackRGBA(vec4 v) {
     return dot(v, 1.0 / vec4(1.0, 255.0, 65025.0, 16581375.0));
@@ -73,7 +79,8 @@ void main() {
             lit += step(depth, d);
         }
     }
-    float shadow = mix(0.6, 1.0, lit / 9.0);
+    float facing = smoothstep(-0.1, 0.3, vFacing);
+    float shadow = mix(0.6, 1.0, min(lit / 9.0, facing));
 
     vec3 highlight = normalize(vec3(0.0, across * 2., 0.4));
     float outline = dot(normal, highlight);
@@ -98,9 +105,11 @@ uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
 uniform mat4 shadowViewMatrix;
 uniform mat4 shadowProjectionMatrix;
+uniform vec3 uLightPos;
 
 varying float across;
 varying vec4 vLightNDC;
+varying float vFacing;
 
 const mat4 depthScaleMatrix = mat4(
     0.5, 0, 0, 0,
@@ -135,6 +144,9 @@ void main() {
   across = (position.x + position.y) * 0.5 * sigma;
   vec4 worldPoint = modelMatrix * vec4(pointB, 1.0);
   vLightNDC = depthScaleMatrix * shadowProjectionMatrix * shadowViewMatrix * worldPoint;
+
+  vec3 lightDirView = normalize((modelViewMatrix * vec4(uLightPos, 1.0)).xyz - mvPosition.xyz);
+  vFacing = lightDirView.z;
 }
 `;
 
@@ -225,6 +237,7 @@ let lastBbox: any;
 let segmentProgram: any, joinProgram: any, segmentDepthProgram: any, joinDepthProgram: any;
 let shadowFB: any, shadowTexture: any;
 let shadowViewMatrix: any, shadowProjectionMatrix: any;
+let lightWorldPos: number[] = [0, 0, 25];
 
 // Segment instance geometry VAO (shared, non-instanced part)
 let segmentGeoBuffer: any, joinGeoBuffer: any;
@@ -370,6 +383,7 @@ function buildJoinDepthVAO(yarnBuffer: any) {
 
 function computeLightMatrices(bbox: any) {
   const lightPos = [bbox.xMin, bbox.yMax, 25];
+  lightWorldPos = lightPos;
   const lightTarget = bbox.center;
   const lightCameraMatrix = Mat4.lookAt(lightPos, lightTarget, [0, 1, 0]);
   shadowViewMatrix = Mat4.inverse(lightCameraMatrix);
@@ -454,6 +468,7 @@ function setMainUniforms(program: any, viewMatrix: any, projMatrix: any, color: 
   gl.uniformMatrix4fv(u.shadowProjectionMatrix, false, shadowProjectionMatrix);
   gl.uniform1f(u.uWidth, diameter);
   gl.uniform3fv(u.uColor, color);
+  gl.uniform3fv(u.uLightPos, lightWorldPos);
 }
 
 function setDepthUniforms(program: any, viewMatrix: any, projMatrix: any, diameter: any) {
