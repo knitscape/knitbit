@@ -1,7 +1,12 @@
 import { hexToRgb } from "../shared/hexToRgb";
 import { yarnRelaxation } from "./relaxation";
-import { segmentsToPoints, generateTopology, computeYarnPathSpline, layoutNodes } from "./layout";
-import type { StitchPatternType } from "./types";
+import {
+  segmentsToPoints,
+  computeYarnPathSpline,
+  layoutNodes,
+} from "./layout";
+import { generateTopology } from "./topology";
+import type { KnittingProgram } from "./types";
 
 import { noodleRenderer } from "./renderer";
 
@@ -13,15 +18,11 @@ const BED_OFFSET = 0.1;
 
 export interface SimulateOptions {
   canvas: HTMLCanvasElement;
-  yarnPalette: string[];
   cellAspect: number;
   resetCamera?: boolean;
 }
 
-export function simulate(
-  stitchPattern: StitchPatternType,
-  options: SimulateOptions
-) {
+export function simulate(program: KnittingProgram, options: SimulateOptions) {
   const ASPECT = options.cellAspect;
   const params = {
     YARN_RADIUS: YARN_DIAMETER / 2,
@@ -30,34 +31,31 @@ export function simulate(
     BED_OFFSET,
   };
 
-  let canvas = options.canvas;
+  const canvas = options.canvas;
   let relaxed = false;
   let sim: ReturnType<typeof yarnRelaxation> | undefined;
   let lastTickMs = 0;
 
   const t0 = performance.now();
 
-  const { DS, yarnPath } = generateTopology(stitchPattern);
-
-  const nodes = layoutNodes(DS, stitchPattern, params);
-
+  const topology = generateTopology(program);
+  const { nodes, nodeMap } = layoutNodes(topology, program, params);
   const segments = computeYarnPathSpline(
-    DS,
-    yarnPath,
-    stitchPattern,
+    topology,
+    program,
     nodes,
+    nodeMap,
     params
   );
 
   const topologyMs = performance.now() - t0;
 
-  const yarnPalette = options.yarnPalette;
   const yarnData = Object.entries(segments).map(([yarnIndex, segmentArr]) => {
     return {
       yarnIndex: yarnIndex,
       pts: segmentsToPoints(segmentArr, nodes),
       diameter: YARN_DIAMETER,
-      color: hexToRgb(yarnPalette[Number(yarnIndex) - 1]).map(
+      color: hexToRgb(program.palette[Number(yarnIndex) - 1]).map(
         (colorInt: number) => colorInt / 255
       ),
     };
@@ -68,7 +66,7 @@ export function simulate(
   function draw() {
     if (sim && sim.running()) {
       const tickStart = performance.now();
-      sim.tick(segments as any, DS, nodes);
+      sim.tick(segments as any, nodes);
 
       for (let i = 0; i < yarnData.length; i++) {
         yarnData[i].pts = segmentsToPoints(

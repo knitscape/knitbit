@@ -1,37 +1,45 @@
-export type GridCell = [number | null, number, [number | null, number | null], number[][], number[], number[][]];
+import type { Bimp } from "../shared/Bimp";
 
-export interface DSType {
-  width: number;
-  height: number;
-  data: GridCell[];
-  readonly length: number;
-  CN(i: number, j: number): GridCell;
-  ST(i: number, j: number): number | null;
-  AV(i: number, j: number): number;
-  MV(i: number, j: number): [number | null, number | null];
-  CNL(i: number, j: number): number[][];
-  YPI(i: number, j: number): number[];
-  CNO(i: number, j: number): number[][];
-  setST(i: number, j: number, st: number): void;
-  setAV(i: number, j: number, av: number): void;
-  setMV(i: number, j: number, mv: [number | null, number | null]): void;
-  setCNL(i: number, j: number, cnl: number[][]): void;
-  setYPI(i: number, j: number, ypi: number[]): void;
-  setCNO(i: number, j: number, cno: number[][]): void;
+// ─── New input format ────────────────────────────────────────────────────────
+
+export interface KnittingProgram {
+  width: number; // number of needles
+  height: number; // number of rows
+  ops: Bimp; // width × height bitmap of Op values
+  yarnFeeder: number[]; // per-row yarn index (1-based)
+  direction: ("left" | "right")[]; // per-row carriage direction
+  racking: number[]; // per-row bed offset
+  palette: string[]; // yarn colors (indexed by yarnFeeder - 1)
 }
 
-export interface StitchPatternType {
-  width: number;
-  height: number;
-  ops: ArrayLike<number>;
-  op(x: number, y: number): number;
-  carriagePasses: string[];
-  yarnSequence: number[];
-  rowMap: number[];
-  yarns: number[];
+// ─── Topology output ─────────────────────────────────────────────────────────
+
+export interface TopologyNode {
+  gridI: number; // 0..2*width-1 (two sub-positions per needle)
+  gridJ: number; // 0..height (grid row)
+  row: number; // program row that created this node
+  bed: "front" | "back";
+  isLeg: boolean; // leg node (lower) vs head node (upper)
+  stackIndex: number; // position in z-stack (0 = deepest)
+  stackSize: number; // total items in stack at this grid position
 }
 
-export type NodeType = { pos: number[]; f: number[]; v: number[]; q0: number[]; q1: number[] };
+export interface TopologyResult {
+  gridWidth: number; // 2 * program.width
+  gridHeight: number; // program.height + 1
+  nodes: TopologyNode[];
+  yarnPaths: { yarnIndex: number; nodeIndices: number[] }[];
+}
+
+// ─── Downstream types (used by layout, relaxation, renderer) ─────────────────
+
+export type NodeType = {
+  pos: number[];
+  f: number[];
+  v: number[];
+  q0: number[];
+  q1: number[];
+};
 
 export type SegmentType = {
   source: number;
@@ -44,7 +52,6 @@ export type SegmentType = {
 
 export type YarnSegments = Record<number, SegmentType[]>;
 
-// Fully resolved segment — all fields present. Used by relaxation after layout is complete.
 export type ResolvedSegment = {
   source: number;
   target: number;

@@ -3,10 +3,10 @@ import Split from "split.js";
 
 import { drawChart } from "./drawChart";
 import { simulate } from "./simulation/simulate";
-import { runScript, type ScriptResult } from "./execute";
-import { yarnSeparation } from "./yarnSeparation";
+import { runScript } from "./execute";
 import { view, type AppState, type ViewHandlers } from "./view";
 import { EXAMPLES } from "./examples";
+import type { KnittingProgram } from "./simulation/types";
 
 const MIN_CELL = 6;
 const MAX_CELL = 80;
@@ -22,8 +22,8 @@ let state: AppState = {
   tickMs: 0,
 };
 
-// Last successful script result — kept so we can re-render on zoom/mode changes
-let lastResult: ScriptResult | null = null;
+// Last successful program — kept so we can re-render on zoom/mode changes
+let lastProgram: KnittingProgram | null = null;
 
 // Simulation handles
 let simDraw: (() => void) | undefined;
@@ -43,7 +43,7 @@ function setState(patch: Partial<AppState>) {
 // ─── Chart rendering ──────────────────────────────────────────────────────────
 
 function renderChart() {
-  if (!lastResult) return;
+  if (!lastProgram) return;
   const canvasOp = document.getElementById(
     "chart-canvas-op"
   ) as HTMLCanvasElement | null;
@@ -52,23 +52,38 @@ function renderChart() {
   ) as HTMLCanvasElement | null;
   if (!canvasOp || !canvasYarn) return;
 
-  const { stitches: stitchBimp, yarns: yarnBimp, palette } = lastResult;
-  const w = stitchBimp.width * state.cellSize;
-  const h = stitchBimp.height * state.cellSize;
+  const w = lastProgram.width * state.cellSize;
+  const h = lastProgram.height * state.cellSize;
 
   canvasOp.width = w;
   canvasOp.height = h;
-  drawChart(canvasOp, "operation", stitchBimp, yarnBimp, palette, state.cellSize, state.cellSize);
+  drawChart(
+    canvasOp,
+    "operation",
+    lastProgram.ops,
+    lastProgram.yarnFeeder,
+    lastProgram.palette,
+    state.cellSize,
+    state.cellSize
+  );
 
   canvasYarn.width = w;
   canvasYarn.height = h;
-  drawChart(canvasYarn, "yarn", stitchBimp, yarnBimp, palette, state.cellSize, state.cellSize);
+  drawChart(
+    canvasYarn,
+    "yarn",
+    lastProgram.ops,
+    lastProgram.yarnFeeder,
+    lastProgram.palette,
+    state.cellSize,
+    state.cellSize
+  );
 }
 
 // ─── Simulation ───────────────────────────────────────────────────────────────
 
 function initSimulation(resetCamera = true) {
-  if (!lastResult) return;
+  if (!lastProgram) return;
 
   if (simStop) {
     simStop();
@@ -84,12 +99,8 @@ function initSimulation(resetCamera = true) {
   ) as HTMLCanvasElement | null;
   if (!simCanvas) return;
 
-  const { stitches: stitchBimp, yarns: yarnBimp, palette } = lastResult;
-  const pattern = yarnSeparation(stitchBimp, yarnBimp, false);
-
-  const result = simulate(pattern, {
+  const result = simulate(lastProgram, {
     canvas: simCanvas,
-    yarnPalette: palette,
     cellAspect: 1,
     resetCamera,
   });
@@ -114,11 +125,11 @@ function relaxSimulation() {
 
 function runWithCode(code: string) {
   try {
-    const result = runScript(code);
-    lastResult = result;
+    const program = runScript(code);
+    lastProgram = program;
 
-    const w = result.stitches.width;
-    const h = result.stitches.height;
+    const w = program.width;
+    const h = program.height;
     setState({
       statusText: `OK \u2014 ${w}\u00d7${h}`,
       statusClass: "text-green-400",
@@ -163,7 +174,9 @@ const handlers: ViewHandlers = {
   onSelectExample: selectExample,
   onRelax: relaxSimulation,
   onReset: () => initSimulation(false),
-  onFitCamera: () => { if (simFitCamera) simFitCamera(); },
+  onFitCamera: () => {
+    if (simFitCamera) simFitCamera();
+  },
 };
 
 function loop() {
