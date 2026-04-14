@@ -25,22 +25,17 @@ const w = 20,
 const ops = Bimp.fromTile(w, h, tile);
 
 const yarnFeeder = new Array(h).fill(1);
-const direction = [];
-for (let row = 0; row < h; row++) {
-  direction.push(row % 2 === 0 ? "right" : "left");
-}
 
 // Insert transfer rows wherever a knit wants to happen on a different
 // bed than the loop currently sits on. For each knit row, we inspect the
 // row below: a column that previously knit on the opposite bed needs a
 // transfer (FTB or BTF) inserted in a prepended row so the loop is on
 // the correct bed before the carriage passes.
-function bedTransfers(ops, yarnFeeder, direction) {
+function bedTransfers(ops, yarnFeeder) {
   const w = ops.width;
   const h = ops.height;
   const outOps = [];
   const outFeeder = [];
-  const outDirection = [];
   const outRacking = [];
 
   for (let row = 0; row < h; row++) {
@@ -62,7 +57,6 @@ function bedTransfers(ops, yarnFeeder, direction) {
         outOps.push(...transferRow);
         // null yarn marks a transfer-only row (no yarn is being fed).
         outFeeder.push(null);
-        outDirection.push(direction[row]);
         outRacking.push(0);
       }
     }
@@ -71,24 +65,21 @@ function bedTransfers(ops, yarnFeeder, direction) {
       outOps.push(ops.pixel(col, row));
     }
     outFeeder.push(yarnFeeder[row]);
-    outDirection.push(direction[row]);
     outRacking.push(0);
   }
 
   return {
     ops: new Bimp(w, outOps.length / w, outOps),
     yarnFeeder: outFeeder,
-    direction: outDirection,
     racking: outRacking,
   };
 }
 
-const result = bedTransfers(ops, yarnFeeder, direction);
+const result = bedTransfers(ops, yarnFeeder);
 
 return {
   ops: result.ops,
   yarnFeeder: result.yarnFeeder,
-  direction: result.direction,
   racking: result.racking,
   palette: ["#a8dadc"],
 };

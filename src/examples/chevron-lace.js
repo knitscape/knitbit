@@ -2,11 +2,9 @@ const w = 12, h = 20;
 const repeat = Math.floor(w / 2);
 const ops = [];
 const yarnFeeder = [];
-const direction = [];
 const racking = [];
 
 for (let row = 0; row < h; row++) {
-  direction.push(row % 2 === 0 ? "right" : "left");
   const section = Math.floor(row / 4) % repeat;
   const phase = row % 4;
 
@@ -38,7 +36,6 @@ for (let row = 0; row < h; row++) {
 return {
   ops: new Bimp(w, h, ops),
   yarnFeeder,
-  direction,
   racking,
   palette: ["#c8b6e2"],
 };

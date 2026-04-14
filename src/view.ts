@@ -1040,8 +1040,8 @@ function helpModal(handlers: ViewHandlers) {
                   ],
                   [
                     "direction",
-                    '("left"|"right")[]',
-                    "Carriage direction per row.",
+                    '("left"|"right")[]?',
+                    "Carriage direction per row. If omitted, each yarn starts right and flips on each subsequent row it's used; transfer rows flip from the previous row.",
                   ],
                   [
                     "palette",

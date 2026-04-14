@@ -23,4 +23,3 @@
 - draw colorwork and do color separation
 - automatically identify decreases and put colors there, then add transfers
   there
-- automatic back-front transfers

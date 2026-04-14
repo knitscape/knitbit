@@ -30,18 +30,13 @@ const base = new Bimp(
 const ops = new Bimp(
   base.width,
   base.height,
-  base.pixels.map((op) => (op == 0 ? Op.Empty : Op.FKNIT)),
+  base.pixels.map((op) => (op == 0 ? Op.EMPTY : Op.FKNIT)),
 );
 
 const yarnFeeder = new Array(base.height).fill(1);
-const direction = [];
-for (let row = 0; row < ops.height; row++) {
-  direction.push(row % 2 === 0 ? "right" : "left");
-}
 
 return {
   ops: ops,
   yarnFeeder,
-  direction,
   palette: ["#a8dadc"],
 };
