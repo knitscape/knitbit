@@ -245,12 +245,21 @@ export function generateTopology(
       const headSecond = dir === "right" ? 2 * srcN + 1 : 2 * srcN;
 
       if (isKnit) {
-        // Square wave: leg → head → head → leg
-        const leg1 = addNode(iFirst, legRow, row, bed, true);
+        // A knit's legs interlock through the *previous* loop's heads on
+        // this needle. If the needle is empty (e.g. after a drop for
+        // pointelle, or first-row knits with no cast-on), there's nothing
+        // to interlock with, so skip the legs entirely — the yarn just
+        // lays a floating head across the needle.
+        const hasPrevLoop = bedArray[n].length > 0;
         const head1 = addNode(headFirst, headRow, row, bed, false);
         const head2 = addNode(headSecond, headRow, row, bed, false);
-        const leg2 = addNode(iSecond, legRow, row, bed, true);
-        if (path) path.push(leg1, head1, head2, leg2);
+        if (hasPrevLoop) {
+          const leg1 = addNode(iFirst, legRow, row, bed, true);
+          const leg2 = addNode(iSecond, legRow, row, bed, true);
+          if (path) path.push(leg1, head1, head2, leg2);
+        } else {
+          if (path) path.push(head1, head2);
+        }
 
         // Knock off old loops, replace with new loop
         bedArray[n] = [{ id: nextLoopId++ }];

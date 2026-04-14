@@ -1,4 +1,5 @@
-const w = 10, h = 16;
+const w = 40,
+  h = 80;
 const ops = [];
 const yarnFeeder = [];
 const direction = [];

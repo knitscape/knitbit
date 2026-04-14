@@ -26,6 +26,7 @@ export interface BimpEditState {
   activeTool: BimpTool;
   dragFrom: [number, number] | null;
   dragTo: [number, number] | null;
+  cellSize: number;
 }
 
 export interface AppState {
@@ -74,6 +75,7 @@ export interface ViewHandlers {
   onBimpShift: (dx: number, dy: number) => void;
   onBimpBrushSelect: (value: number) => void;
   onBimpResize: (width: number, height: number) => void;
+  onBimpZoom: (delta: number) => void;
   onBimpPaletteColorChange: (index: number, color: string) => void;
   onBimpPaletteAdd: () => void;
   onToggleAutoRun: () => void;
@@ -488,7 +490,7 @@ function examplePickerModal(handlers: ViewHandlers) {
 
 function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
   const { width, height, pixels, palette, brushValue } = edit;
-  const cellSizePx = Math.max(18, Math.min(44, Math.floor(320 / Math.max(width, height))));
+  const cellSizePx = edit.cellSize;
 
   const brushValues: number[] = [];
   if (palette && palette.length > 0) {
@@ -505,24 +507,11 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
     <div
       class="absolute inset-0 z-10 bg-[var(--base1)] flex flex-col overflow-hidden">
         <div
-          class="flex items-center justify-between gap-3 py-[0.5rem] px-4 [border-bottom:1px_solid_var(--base3)] shrink-0">
-          <span
-            class="text-[0.78rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base10)]">
-            Bitmap editor \u2014 ${width}\u00D7${height}
-          </span>
-          <button
-            class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
-            title="Close without saving"
-            @click=${handlers.onBimpCancel}>
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-
-        <div class="flex-1 overflow-auto px-5 py-4 flex flex-col gap-4">
-          <div class="flex items-center gap-3 flex-wrap">
+          class="flex items-center justify-between gap-3 py-[0.4rem] px-3 [border-bottom:1px_solid_var(--base3)] shrink-0">
+          <div class="flex items-center gap-3 min-w-0">
             <span
-              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
-              Size
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base10)] shrink-0">
+              Bitmap
             </span>
             <div class="flex items-center gap-[0.3rem]">
               <input
@@ -535,8 +524,9 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
                   const v = parseInt((e.target as HTMLInputElement).value, 10);
                   if (Number.isFinite(v)) handlers.onBimpResize(v, height);
                 }}
-                class="w-[3.5rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] py-[0.15rem] px-[0.35rem] text-[0.78rem] font-mono text-[color:var(--base12)] text-right" />
-              <span class="text-[color:var(--base7)] text-[0.78rem]">\u00D7</span>
+                title="Width"
+                class="w-[3rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] py-[0.1rem] px-[0.3rem] text-[0.76rem] font-mono text-[color:var(--base12)] text-right" />
+              <span class="text-[color:var(--base7)] text-[0.76rem]">\u00D7</span>
               <input
                 type="number"
                 min="1"
@@ -547,31 +537,45 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
                   const v = parseInt((e.target as HTMLInputElement).value, 10);
                   if (Number.isFinite(v)) handlers.onBimpResize(width, v);
                 }}
-                class="w-[3.5rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] py-[0.15rem] px-[0.35rem] text-[0.78rem] font-mono text-[color:var(--base12)] text-right" />
+                title="Height"
+                class="w-[3rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] py-[0.1rem] px-[0.3rem] text-[0.76rem] font-mono text-[color:var(--base12)] text-right" />
             </div>
-
-            <span
-              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] ml-3">
-              Shift
-            </span>
-            ${[
-              { dx: -1, dy: 0, icon: "fa-arrow-left", title: "Shift left" },
-              { dx: 1, dy: 0, icon: "fa-arrow-right", title: "Shift right" },
-              { dx: 0, dy: -1, icon: "fa-arrow-up", title: "Shift up" },
-              { dx: 0, dy: 1, icon: "fa-arrow-down", title: "Shift down" },
-            ].map(
-              (d) => html`<button
-                class="flex items-center justify-center w-[1.6rem] h-[1.6rem] text-[0.72rem] rounded-[3px] cursor-pointer bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"
-                title=${d.title}
-                @click=${() => handlers.onBimpShift(d.dx, d.dy)}>
-                <i class="fa-solid ${d.icon}"></i>
-              </button>`
-            )}
           </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-[2px]">
+              <button
+                class="flex items-center justify-center w-[1.6rem] h-[1.6rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.72rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                title="Zoom out"
+                @click=${() => handlers.onBimpZoom(-4)}>
+                <i class="fa-solid fa-minus"></i>
+              </button>
+              <button
+                class="flex items-center justify-center w-[1.6rem] h-[1.6rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.72rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                title="Zoom in"
+                @click=${() => handlers.onBimpZoom(4)}>
+                <i class="fa-solid fa-plus"></i>
+              </button>
+            </div>
+            <button
+              class="py-[0.2rem] px-[0.65rem] text-[0.76rem] rounded-[3px] bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+              title="Close without saving"
+              @click=${handlers.onBimpCancel}>
+              Cancel
+            </button>
+            <button
+              autofocus
+              class="py-[0.2rem] px-[0.8rem] text-[0.76rem] [font-variation-settings:'wght'_600] rounded-[3px] bg-[var(--accent)] text-white border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
+              title="Save changes to source"
+              @click=${handlers.onBimpSave}>
+              Save
+            </button>
+          </div>
+        </div>
 
-          <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex-1 overflow-auto px-5 py-4 flex flex-col gap-4">
+          <div class="flex items-center gap-3 flex-wrap">
             <span
-              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mr-1">
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
               Tool
             </span>
             ${(
@@ -592,90 +596,100 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
                 <i class="fa-solid ${t.icon}"></i>
               </button>`
             )}
-          </div>
-
-          <div class="flex items-center gap-2 flex-wrap">
             <span
-              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mr-1">
-              ${palette ? "Palette" : "Brush"}
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] ml-3">
+              Shift
             </span>
-            ${brushValues.map((v) => {
-              const bg = colorFor(v, palette);
-              const isInPalette = !!palette && v < palette.length;
-              return html`<div class="relative">
-                <button
-                  class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.72rem] font-mono rounded-[3px] cursor-pointer ${brushValue ===
-                  v
-                    ? "outline outline-2 outline-[var(--accent)] outline-offset-1"
-                    : "outline outline-1 outline-[color:var(--base4)]"}"
-                  style="background: ${bg}; color: ${pickTextColor(bg)}"
-                  title=${isInPalette ? `${v} \u2014 ${palette![v]}` : `${v}`}
-                  @click=${() => handlers.onBimpBrushSelect(v)}>
-                  ${v}
-                </button>
-                ${isInPalette
-                  ? html`<input
-                      type="color"
-                      .value=${palette![v]}
-                      @input=${(e: Event) =>
-                        handlers.onBimpPaletteColorChange(
-                          v,
-                          (e.target as HTMLInputElement).value
-                        )}
-                      title="Edit color ${v}"
-                      class="absolute -bottom-1 -right-1 w-[0.9rem] h-[0.9rem] p-0 border border-[color:var(--base1)] rounded-[2px] cursor-pointer bg-transparent" />`
-                  : ""}
-              </div>`;
-            })}
-            <button
-              class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.9rem] rounded-[3px] cursor-pointer bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"
-              title="Add a palette color"
-              @click=${() => handlers.onBimpPaletteAdd()}>
-              +
-            </button>
+            ${[
+              { dx: -1, dy: 0, icon: "fa-arrow-left", title: "Shift left" },
+              { dx: 1, dy: 0, icon: "fa-arrow-right", title: "Shift right" },
+              { dx: 0, dy: -1, icon: "fa-arrow-up", title: "Shift up" },
+              { dx: 0, dy: 1, icon: "fa-arrow-down", title: "Shift down" },
+            ].map(
+              (d) => html`<button
+                class="flex items-center justify-center w-[1.6rem] h-[1.6rem] text-[0.72rem] rounded-[3px] cursor-pointer bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"
+                title=${d.title}
+                @click=${() => handlers.onBimpShift(d.dx, d.dy)}>
+                <i class="fa-solid ${d.icon}"></i>
+              </button>`
+            )}
           </div>
 
-          <canvas
-            class="block cursor-crosshair select-none rounded-[3px] bg-[var(--base3)]"
-            style="width: ${width * cellSizePx}px; height: ${height * cellSizePx}px;"
-            ${ref((el) => {
-              if (el) drawBimpCanvas(el as HTMLCanvasElement, edit, cellSizePx);
-            })}
-            @pointerdown=${(e: PointerEvent) => {
-              e.preventDefault();
-              const [cx, cy] = canvasToCell(e, cellSizePx, height);
-              (e.currentTarget as HTMLCanvasElement).setPointerCapture(
-                e.pointerId
-              );
-              handlers.onBimpPointerDown(cx, cy);
-            }}
-            @pointermove=${(e: PointerEvent) => {
-              if (!edit.dragFrom) return;
-              const [cx, cy] = canvasToCell(e, cellSizePx, height);
-              handlers.onBimpPointerMove(cx, cy);
-            }}
-            @pointerup=${(e: PointerEvent) => {
-              (e.currentTarget as HTMLCanvasElement).releasePointerCapture(
-                e.pointerId
-              );
-              handlers.onBimpPointerUp();
-            }}
-            @pointercancel=${() => handlers.onBimpPointerUp()}></canvas>
-        </div>
+          <div class="flex items-start gap-3">
+            <div class="flex flex-col gap-[0.3rem] shrink-0">
+              ${brushValues.map((v) => {
+                const bg = colorFor(v, palette);
+                const isInPalette = !!palette && v < palette.length;
+                return html`<div class="relative">
+                  <button
+                    class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.72rem] font-mono rounded-[3px] cursor-pointer ${brushValue ===
+                    v
+                      ? "outline outline-2 outline-[var(--accent)] outline-offset-1"
+                      : "outline outline-1 outline-[color:var(--base4)]"}"
+                    style="background: ${bg}; color: ${pickTextColor(bg)}"
+                    title=${isInPalette ? `${v} \u2014 ${palette![v]}` : `${v}`}
+                    @click=${() => handlers.onBimpBrushSelect(v)}>
+                    ${v}
+                  </button>
+                  ${isInPalette
+                    ? html`<label
+                        class="absolute -bottom-[3px] -right-[3px] w-[0.9rem] h-[0.9rem] flex items-center justify-center rounded-full bg-[var(--base1)] border border-[color:var(--base4)] text-[0.55rem] text-[color:var(--base10)] cursor-pointer hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] [transition:background_80ms,color_80ms,border-color_80ms]"
+                        title="Edit color ${v}"
+                        @click=${(e: MouseEvent) => e.stopPropagation()}>
+                        <i class="fa-solid fa-pencil"></i>
+                        <input
+                          type="color"
+                          .value=${palette![v]}
+                          @input=${(e: Event) =>
+                            handlers.onBimpPaletteColorChange(
+                              v,
+                              (e.target as HTMLInputElement).value
+                            )}
+                          class="sr-only" />
+                      </label>`
+                    : ""}
+                </div>`;
+              })}
+              <button
+                class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.9rem] rounded-[3px] cursor-pointer bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"
+                title="Add a palette color"
+                @click=${() => handlers.onBimpPaletteAdd()}>
+                +
+              </button>
+            </div>
 
-        <div
-          class="flex justify-end gap-2 py-[0.5rem] px-4 [border-top:1px_solid_var(--base3)] shrink-0">
-          <button
-            class="py-[0.25rem] px-[0.7rem] text-[0.78rem] rounded-[3px] bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
-            @click=${handlers.onBimpCancel}>
-            Cancel
-          </button>
-          <button
-            autofocus
-            class="py-[0.25rem] px-[0.9rem] text-[0.78rem] [font-variation-settings:'wght'_600] rounded-[3px] bg-[var(--accent)] text-white border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
-            @click=${handlers.onBimpSave}>
-            Save
-          </button>
+            <canvas
+              class="block cursor-crosshair select-none rounded-[3px] bg-[var(--base3)]"
+              style="width: ${width * cellSizePx}px; height: ${height * cellSizePx}px;"
+              ${ref((el) => {
+                if (el) drawBimpCanvas(el as HTMLCanvasElement, edit, cellSizePx);
+              })}
+              @pointerdown=${(e: PointerEvent) => {
+                e.preventDefault();
+                const [cx, cy] = canvasToCell(e, cellSizePx, height);
+                (e.currentTarget as HTMLCanvasElement).setPointerCapture(
+                  e.pointerId
+                );
+                handlers.onBimpPointerDown(cx, cy);
+              }}
+              @pointermove=${(e: PointerEvent) => {
+                if (!edit.dragFrom) return;
+                const [cx, cy] = canvasToCell(e, cellSizePx, height);
+                handlers.onBimpPointerMove(cx, cy);
+              }}
+              @pointerup=${(e: PointerEvent) => {
+                (e.currentTarget as HTMLCanvasElement).releasePointerCapture(
+                  e.pointerId
+                );
+                handlers.onBimpPointerUp();
+              }}
+              @pointercancel=${() => handlers.onBimpPointerUp()}
+              @wheel=${(e: WheelEvent) => {
+                if (!e.ctrlKey && !e.metaKey) return;
+                e.preventDefault();
+                handlers.onBimpZoom(e.deltaY < 0 ? 4 : -4);
+              }}></canvas>
+          </div>
         </div>
     </div>
   `;

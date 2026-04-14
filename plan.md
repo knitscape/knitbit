@@ -1,9 +1,5 @@
 # Dev plan
 
-## topology
-
-- pointelle holes are creating leg nodes when they shouldn't
-
 ## simulation/rendering
 
 - figure out whatever is going on with the renderer
@@ -16,10 +12,6 @@
   should be an icon to click to edit it
 
 ## bitmap widget
-
-- cancel/save should be in the top bar, replacing the x.no bottom bar
-- fix the color picker styles. the little icon to open the color picker is all
-  messed up
 
 - later:
   - upload your own bitmap to the bitmap widget

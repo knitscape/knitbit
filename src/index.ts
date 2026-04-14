@@ -388,6 +388,8 @@ const handlers: ViewHandlers = {
     updateScrubHighlight();
   },
   onEditBimp: (target: BimpEditTarget) => {
+    const maxDim = Math.max(target.width, target.height);
+    const initialCellSize = Math.max(18, Math.min(44, Math.floor(320 / maxDim)));
     setState({
       editingBimp: {
         exprFrom: target.exprFrom,
@@ -400,6 +402,7 @@ const handlers: ViewHandlers = {
         activeTool: "brush",
         dragFrom: null,
         dragTo: null,
+        cellSize: initialCellSize,
       },
     });
   },
@@ -525,6 +528,13 @@ const handlers: ViewHandlers = {
     }
     setState({ editingBimp: { ...cur, width: w, height: h, pixels } });
     if (state.autoRun) runCurrentScript();
+  },
+  onBimpZoom: (delta: number) => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    const next = Math.max(6, Math.min(80, cur.cellSize + delta));
+    if (next === cur.cellSize) return;
+    setState({ editingBimp: { ...cur, cellSize: next } });
   },
   onBimpPaletteColorChange: (index: number, color: string) => {
     if (!state.editingBimp) return;
