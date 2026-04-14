@@ -154,35 +154,10 @@ export function view(state: AppState, handlers: ViewHandlers) {
                   <i class="fa-solid fa-question"></i>
                 </button>
                 <button
-                  class="flex items-center gap-[0.3rem] py-[0.2rem] px-[0.5rem] text-[0.72rem] rounded-[3px] cursor-pointer [transition:background_80ms,color_80ms] ${state.autoRun
-                    ? "bg-[var(--accent)] text-white border-0 hover:brightness-110"
-                    : "bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base4)] hover:text-[color:var(--base13)]"}"
-                  title=${state.autoRun
-                    ? "Auto-run is ON \u2014 click to turn off"
-                    : "Auto-run is OFF \u2014 click to run on every edit"}
-                  @click=${handlers.onToggleAutoRun}>
-                  <i class="fa-solid fa-bolt"></i> Auto
-                </button>
-                <button
                   class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
                   title="Download this script as a .js file"
                   @click=${handlers.onDownloadScript}>
                   <i class="fa-solid fa-download"></i>
-                </button>
-                <button
-                  ?disabled=${state.autoRun}
-                  class="flex items-center gap-[0.4rem] [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 [transition:filter_80ms] ${state.autoRun
-                    ? "bg-[var(--base3)] text-[color:var(--base7)] cursor-not-allowed"
-                    : "bg-[var(--accent)] text-white cursor-pointer hover:brightness-110"}"
-                  title=${state.autoRun
-                    ? "Auto-run is on \u2014 the script runs automatically"
-                    : "Run script (Ctrl/Cmd+Enter)"}
-                  @click=${handlers.onRun}>
-                  <i class="fa-solid fa-play"></i> Run
-                  <span
-                    class="text-[0.68rem] opacity-80 [font-variation-settings:'wght'_500]"
-                    >\u2318\u21B5</span
-                  >
                 </button>
               </div>
             </div>
@@ -200,6 +175,38 @@ export function view(state: AppState, handlers: ViewHandlers) {
               })}
               class="flex-1 w-full overflow-hidden bg-[var(--base0)]"></div>
             ${state.editingBimp ? bimpEditorPane(state.editingBimp, handlers) : ""}
+            <div
+              class="shrink-0 flex items-center gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
+              <span
+                class="flex-1 min-w-0 text-[0.78rem] whitespace-nowrap overflow-hidden text-ellipsis ${state.statusClass}">
+                ${state.statusText}
+              </span>
+              <button
+                class="flex items-center gap-[0.3rem] py-[0.2rem] px-[0.5rem] text-[0.72rem] rounded-[3px] cursor-pointer [transition:background_80ms,color_80ms] shrink-0 ${state.autoRun
+                  ? "bg-[var(--accent)] text-white border-0 hover:brightness-110"
+                  : "bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base4)] hover:text-[color:var(--base13)]"}"
+                title=${state.autoRun
+                  ? "Auto-run is ON \u2014 click to turn off"
+                  : "Auto-run is OFF \u2014 click to run on every edit"}
+                @click=${handlers.onToggleAutoRun}>
+                <i class="fa-solid fa-bolt"></i> Auto
+              </button>
+              <button
+                ?disabled=${state.autoRun}
+                class="flex items-center gap-[0.4rem] [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 [transition:filter_80ms] shrink-0 ${state.autoRun
+                  ? "bg-[var(--base3)] text-[color:var(--base7)] cursor-not-allowed"
+                  : "bg-[var(--accent)] text-white cursor-pointer hover:brightness-110"}"
+                title=${state.autoRun
+                  ? "Auto-run is on \u2014 the script runs automatically"
+                  : "Run script (Ctrl/Cmd+Enter)"}
+                @click=${handlers.onRun}>
+                <i class="fa-solid fa-play"></i> Run
+                <span
+                  class="text-[0.68rem] opacity-80 [font-variation-settings:'wght'_500]"
+                  >\u2318\u21B5</span
+                >
+              </button>
+            </div>
           </div>
           <div
             id="chart-pane"
@@ -238,6 +245,28 @@ export function view(state: AppState, handlers: ViewHandlers) {
                 id="chart-scrub-row"
                 class="chart-scrub-row pointer-events-none absolute left-0 right-0 hidden"></div>
             </div>
+            ${state.totalStitches > 0
+              ? html`<div
+                  class="shrink-0 flex items-center gap-3 py-[0.35rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
+                  <span
+                    class="text-[0.7rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] shrink-0">
+                    Step
+                  </span>
+                  <input
+                    type="range"
+                    min="0"
+                    max=${state.totalStitches}
+                    step="1"
+                    .value=${String(state.maxStitch)}
+                    @input=${(e: Event) =>
+                      handlers.onScrub(+(e.target as HTMLInputElement).value)}
+                    class="flex-1 accent-[var(--accent)]" />
+                  <span
+                    class="font-mono text-[0.72rem] text-[color:var(--base10)] tabular-nums w-[5.5rem] text-right shrink-0">
+                    ${state.maxStitch} / ${state.totalStitches}
+                  </span>
+                </div>`
+              : ""}
             <div
               class="shrink-0 flex items-center justify-between gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
               <span
@@ -352,34 +381,7 @@ export function view(state: AppState, handlers: ViewHandlers) {
                 : ""}
             </div>
           </div>
-          ${state.totalStitches > 0
-            ? html`<div
-                class="shrink-0 flex items-center gap-3 py-[0.35rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
-                <span
-                  class="text-[0.7rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] shrink-0">
-                  Step
-                </span>
-                <input
-                  type="range"
-                  min="0"
-                  max=${state.totalStitches}
-                  step="1"
-                  .value=${String(state.maxStitch)}
-                  @input=${(e: Event) =>
-                    handlers.onScrub(+(e.target as HTMLInputElement).value)}
-                  class="flex-1 accent-[var(--accent)]" />
-                <span
-                  class="font-mono text-[0.72rem] text-[color:var(--base10)] tabular-nums w-[5.5rem] text-right shrink-0">
-                  ${state.maxStitch} / ${state.totalStitches}
-                </span>
-              </div>`
-            : ""}
         </div>
-    </div>
-
-    <div
-      class="py-1 px-3 text-[0.78rem] bg-[var(--base1)] [border-top:1px_solid_var(--base3)] shrink-0 whitespace-nowrap overflow-hidden text-ellipsis min-h-[1.7rem] ${state.statusClass}">
-      ${state.statusText}
     </div>
 
     ${state.showHelp ? helpModal(handlers) : ""}

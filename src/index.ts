@@ -126,6 +126,25 @@ function stitchToRowCol(
   return null;
 }
 
+function rowColToStitch(
+  program: KnittingProgram,
+  targetRow: number,
+  targetCol: number
+): number {
+  const w = program.width;
+  let count = 0;
+  for (let row = 0; row <= targetRow; row++) {
+    const dir = program.direction[row];
+    for (let i = 0; i < w; i++) {
+      const col = dir === "right" ? i : w - 1 - i;
+      const op = program.ops.pixel(col, row);
+      if (op !== Op.MISS) count++;
+      if (row === targetRow && col === targetCol) return count;
+    }
+  }
+  return count;
+}
+
 function updateScrubHighlight() {
   const rowEl = document.getElementById("chart-scrub-row");
   const cellEl = document.getElementById("chart-scrub-cell");
@@ -226,17 +245,11 @@ function runWithCode(code: string, resetView = false) {
     const h = program.height;
     const total = countStitches(program);
 
-    // If the user was scrubbing, keep their position (clamped to the new
-    // total) instead of jumping back to the end on every re-run.
-    const nextMaxStitch = resetView
-      ? total
-      : Math.min(state.maxStitch, total);
-
     setState({
       statusText: `OK \u2014 ${w}\u00d7${h}`,
       statusClass: "text-green-400",
       totalStitches: total,
-      maxStitch: nextMaxStitch,
+      maxStitch: total,
     });
 
     renderChart();
@@ -692,6 +705,8 @@ function init() {
     );
 
     // Drag-to-pan: ops grid pans both axes, sidebar drags vertically only.
+    // If the pointer doesn't actually move, treat it as a click and scrub.
+    const DRAG_THRESHOLD_PX = 4;
     const startPan = (e: PointerEvent, allowX: boolean) => {
       if (e.button !== 0 || !chartScroll) return;
       const target = e.currentTarget as HTMLElement;
@@ -700,18 +715,43 @@ function init() {
       const startY = e.clientY;
       const startScrollLeft = chartScroll.scrollLeft;
       const startScrollTop = chartScroll.scrollTop;
-      document.body.style.cursor = "grabbing";
+      let moved = false;
 
       const onMove = (ev: PointerEvent) => {
+        if (!moved) {
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+          if (dx * dx + dy * dy > DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+            moved = true;
+            document.body.style.cursor = "grabbing";
+          } else {
+            return;
+          }
+        }
         chartScroll.scrollTop = startScrollTop - (ev.clientY - startY);
         if (allowX)
           chartScroll.scrollLeft = startScrollLeft - (ev.clientX - startX);
       };
-      const onEnd = () => {
+      const onEnd = (ev: PointerEvent) => {
         target.removeEventListener("pointermove", onMove);
         target.removeEventListener("pointerup", onEnd);
         target.removeEventListener("pointercancel", onEnd);
         document.body.style.cursor = "";
+        if (!moved && allowX && lastProgram && opsCanvas) {
+          // Click without drag on the ops grid → scrub to that cell.
+          const cs = state.cellSize;
+          const h = lastProgram.height;
+          const w = lastProgram.width;
+          const rect = opsCanvas.getBoundingClientRect();
+          const x = ev.clientX - rect.left;
+          const y = ev.clientY - rect.top;
+          const col = Math.floor(x / cs);
+          const rowFromTop = Math.floor(y / cs);
+          if (col >= 0 && col < w && rowFromTop >= 0 && rowFromTop < h) {
+            const row = h - 1 - rowFromTop;
+            handlers.onScrub(rowColToStitch(lastProgram, row, col));
+          }
+        }
       };
       target.addEventListener("pointermove", onMove);
       target.addEventListener("pointerup", onEnd);
@@ -806,6 +846,7 @@ function init() {
       lastMouse = null;
       hideHover();
     });
+
     chartScroll?.addEventListener("scroll", () => {
       updateHover();
       updateScrubHighlight();
