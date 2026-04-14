@@ -48,6 +48,36 @@
   border-radius: 2px;
 }
 
+/* ─── Scrollbar (chart pane) ────────────────────────────────────────────── */
+
+.chart-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--base4) transparent;
+}
+
+.chart-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.chart-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chart-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--base4);
+  border-radius: 5px;
+  border: 2px solid var(--base1);
+}
+
+.chart-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--base5);
+}
+
+.chart-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ─── CodeMirror fill container ────────────────────────────────────────── */
 
 #code-editor .cm-editor {

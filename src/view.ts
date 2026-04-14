@@ -96,16 +96,19 @@ export function view(state: AppState, handlers: ViewHandlers) {
           </div>
           <div
             id="chart-pane"
-            class="flex flex-col overflow-hidden min-h-0 bg-[var(--base1)] [border-top:1px_solid_var(--base3)] relative">
+            class="flex overflow-hidden min-h-0 bg-[var(--base1)] [border-top:1px_solid_var(--base3)] relative">
+            <div
+              id="chart-sidebar-wrap"
+              class="shrink-0 overflow-hidden bg-[var(--base2)] [border-right:1px_solid_var(--base3)]">
+              <div id="chart-sidebar-inner" class="px-2 py-3 will-change-transform">
+                <canvas id="chart-sidebar" class="block"></canvas>
+              </div>
+            </div>
             <div
               id="chart-scroll"
-              class="flex-1 overflow-auto">
-              <div class="flex items-start gap-2 py-3 pr-3 w-max">
-                <div
-                  class="sticky left-0 z-[1] bg-[var(--base1)] pl-3 pr-1 shrink-0">
-                  <canvas id="chart-sidebar" class="block"></canvas>
-                </div>
-                <canvas id="chart-canvas" class="block shrink-0"></canvas>
+              class="flex-1 overflow-auto chart-scrollbar">
+              <div class="px-3 py-3 w-max">
+                <canvas id="chart-canvas" class="block"></canvas>
               </div>
             </div>
             <div class="absolute bottom-2 right-2 flex gap-[2px] z-10">
@@ -127,46 +130,57 @@ export function view(state: AppState, handlers: ViewHandlers) {
 
         <div
           id="preview-pane"
-          class="flex flex-col overflow-hidden min-w-0 bg-[var(--base1)] relative">
-          <canvas id="sim-canvas" class="block w-full h-full"></canvas>
+          class="flex flex-col overflow-hidden min-w-0 bg-[var(--base1)]">
           <div
-            class="absolute top-2 left-2 flex flex-col gap-[0.15rem] font-mono text-[0.7rem] text-[color:var(--base8)] pointer-events-none">
-            <span>topology: ${state.topologyMs.toFixed(1)}ms</span>
-            ${state.simState !== "idle"
-              ? html`<span>tick: ${state.tickMs.toFixed(1)}ms</span>`
-              : ""}
+            class="shrink-0 flex items-center justify-between gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-bottom:1px_solid_var(--base3)]">
+            <span
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
+              Preview
+            </span>
+            <div class="flex items-center gap-[0.3rem]">
+              <button
+                class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.55rem] text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.04em] uppercase rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                title="Toggle between technical (row-based) and compressed (per-needle count) layout"
+                @click=${handlers.onToggleLayoutMode}>
+                ${state.layoutMode === "technical" ? "technical" : "compressed"}
+              </button>
+              <button
+                class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                title="Fit view"
+                @click=${handlers.onFitCamera}>
+                <i class="fa-solid fa-expand"></i>
+              </button>
+              ${state.simState === "idle"
+                ? html`<button
+                    class="flex items-center gap-[0.4rem] bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
+                    title="Relax simulation"
+                    @click=${handlers.onRelax}>
+                    <i class="fa-solid fa-play"></i> Relax
+                  </button>`
+                : state.simState === "relaxing"
+                  ? html`<button
+                      class="flex items-center gap-[0.4rem] bg-[var(--base4)] text-[color:var(--base7)] [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-default"
+                      disabled>
+                      Relaxing\u2026
+                    </button>`
+                  : html`<button
+                      class="flex items-center gap-[0.4rem] bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
+                      title="Reset simulation"
+                      @click=${handlers.onReset}>
+                      <i class="fa-solid fa-rotate-left"></i> Reset
+                    </button>`}
+            </div>
           </div>
-          <div class="absolute top-2 right-2 flex gap-[2px] z-10">
-            <button
-              class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.55rem] text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.04em] uppercase rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
-              title="Toggle between technical (row-based) and compressed (per-needle count) layout"
-              @click=${handlers.onToggleLayoutMode}>
-              ${state.layoutMode === "technical" ? "technical" : "compressed"}
-            </button>
-            <button
-              class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.45rem] text-[0.75rem] cursor-pointer rounded-[3px] text-[color:var(--base12)] [transition:background_80ms] hover:bg-[var(--base4)]"
-              title="Fit view"
-              @click=${handlers.onFitCamera}>
-              <i class="fa-solid fa-expand"></i>
-            </button>
+          <div class="flex-1 min-h-0 relative">
+            <canvas id="sim-canvas" class="block w-full h-full"></canvas>
+            <div
+              class="absolute top-2 left-2 flex flex-col gap-[0.15rem] font-mono text-[0.7rem] text-[color:var(--base8)] pointer-events-none">
+              <span>topology: ${state.topologyMs.toFixed(1)}ms</span>
+              ${state.simState !== "idle"
+                ? html`<span>tick: ${state.tickMs.toFixed(1)}ms</span>`
+                : ""}
+            </div>
           </div>
-          ${state.simState === "idle"
-            ? html`<button
-                class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.4rem] px-[1.2rem] text-[0.85rem] z-10 cursor-pointer border-0 rounded-[3px] hover:brightness-110"
-                @click=${handlers.onRelax}>
-                <i class="fa-solid fa-play"></i> Relax
-              </button>`
-            : state.simState === "relaxing"
-              ? html`<button
-                  class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[var(--base4)] text-[color:var(--base7)] [font-variation-settings:'wght'_600] py-[0.4rem] px-[1.2rem] text-[0.85rem] z-10 cursor-default border-0 rounded-[3px]"
-                  disabled>
-                  Relaxing\u2026
-                </button>`
-              : html`<button
-                  class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.4rem] px-[1.2rem] text-[0.85rem] z-10 cursor-pointer border-0 rounded-[3px] hover:brightness-110"
-                  @click=${handlers.onReset}>
-                  <i class="fa-solid fa-rotate-left"></i> Reset
-                </button>`}
         </div>
       </div>
     </div>

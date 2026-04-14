@@ -221,6 +221,25 @@ function init() {
       }
     });
 
+    // Sync sidebar vertical position with the ops scroll container, and
+    // forward wheel scrolls over the sidebar (it has overflow:hidden) to it.
+    const chartScroll = document.getElementById("chart-scroll");
+    const sidebarInner = document.getElementById("chart-sidebar-inner");
+    const sidebarWrap = document.getElementById("chart-sidebar-wrap");
+    chartScroll?.addEventListener("scroll", () => {
+      if (sidebarInner)
+        sidebarInner.style.transform = `translateY(${-chartScroll.scrollTop}px)`;
+    });
+    sidebarWrap?.addEventListener(
+      "wheel",
+      (e) => {
+        if (e.ctrlKey || e.metaKey || !chartScroll) return;
+        e.preventDefault();
+        chartScroll.scrollBy({ top: e.deltaY, left: e.deltaX });
+      },
+      { passive: false }
+    );
+
     // Ctrl+scroll to zoom on the chart pane
     const chartPane = document.getElementById("chart-pane");
     chartPane?.addEventListener(
