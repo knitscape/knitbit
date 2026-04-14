@@ -85,7 +85,7 @@ export function view(state: AppState, handlers: ViewHandlers) {
   return html`
     <div class="flex flex-1 overflow-hidden min-h-0">
         <div id="editor-pane" class="flex flex-col overflow-hidden min-w-0">
-          <div id="code-pane" class="flex flex-col overflow-hidden min-h-0">
+          <div id="code-pane" class="flex flex-col overflow-hidden min-h-0 relative">
             <div
               class="shrink-0 flex items-center justify-between gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-bottom:1px_solid_var(--base3)]">
               <span
@@ -129,6 +129,7 @@ export function view(state: AppState, handlers: ViewHandlers) {
                   );
               })}
               class="flex-1 w-full overflow-hidden bg-[var(--base0)]"></div>
+            ${state.editingBimp ? bimpEditorPane(state.editingBimp, handlers) : ""}
           </div>
           <div
             id="chart-pane"
@@ -312,7 +313,6 @@ export function view(state: AppState, handlers: ViewHandlers) {
     </div>
 
     ${state.showHelp ? helpModal(handlers) : ""}
-    ${state.editingBimp ? bimpModal(state.editingBimp, handlers) : ""}
     ${state.showExamplePicker ? examplePickerModal(handlers) : ""}
   `;
 }
@@ -353,7 +353,7 @@ function examplePickerModal(handlers: ViewHandlers) {
   `;
 }
 
-function bimpModal(edit: BimpEditState, handlers: ViewHandlers) {
+function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
   const { width, height, pixels, palette, brushValue } = edit;
   const cellSizePx = Math.max(18, Math.min(44, Math.floor(320 / Math.max(width, height))));
 
@@ -370,12 +370,7 @@ function bimpModal(edit: BimpEditState, handlers: ViewHandlers) {
 
   return html`
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
-      @click=${(e: MouseEvent) => {
-        if (e.target === e.currentTarget) handlers.onBimpCancel();
-      }}>
-      <div
-        class="bg-[var(--base1)] border border-[color:var(--base3)] rounded-[4px] shadow-xl flex flex-col overflow-hidden">
+      class="absolute inset-0 z-10 bg-[var(--base1)] flex flex-col overflow-hidden">
         <div
           class="flex items-center justify-between gap-3 py-[0.5rem] px-4 [border-bottom:1px_solid_var(--base3)] shrink-0">
           <span
@@ -390,7 +385,7 @@ function bimpModal(edit: BimpEditState, handlers: ViewHandlers) {
           </button>
         </div>
 
-        <div class="px-5 py-4 flex flex-col gap-4">
+        <div class="flex-1 overflow-auto px-5 py-4 flex flex-col gap-4">
           <div class="flex items-center gap-3 flex-wrap">
             <span
               class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
@@ -502,7 +497,6 @@ function bimpModal(edit: BimpEditState, handlers: ViewHandlers) {
             Save
           </button>
         </div>
-      </div>
     </div>
   `;
 }

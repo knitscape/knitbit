@@ -138,7 +138,7 @@ class BimpEditButton extends WidgetType {
     const btn = document.createElement("button");
     btn.className = "cm-bimp-edit-btn";
     btn.title = `Edit bitmap (${this.target.width}\u00D7${this.target.height})`;
-    btn.textContent = "\u270E";
+    btn.innerHTML = `\u270E <span class="cm-bimp-edit-btn-label">${this.target.width}\u00D7${this.target.height}</span>`;
     btn.onmousedown = (e) => e.preventDefault();
     btn.onclick = (e) => {
       e.preventDefault();
@@ -160,7 +160,10 @@ function buildDecos(view: EditorView, onClick: OnEditBimp): DecorationSet {
     enter(nodeRef) {
       if (nodeRef.name !== "NewExpression") return;
       const target = parseBimpNew(nodeRef.node, view.state);
-      if (target) found.push({ pos: nodeRef.to, target });
+      if (target) {
+        const line = view.state.doc.lineAt(nodeRef.from);
+        found.push({ pos: line.from, target });
+      }
     },
   });
   found.sort((a, b) => a.pos - b.pos);
@@ -172,7 +175,7 @@ function buildDecos(view: EditorView, onClick: OnEditBimp): DecorationSet {
       pos,
       Decoration.widget({
         widget: new BimpEditButton(target, onClick),
-        side: 1,
+        side: -1,
       })
     );
   }
