@@ -22,12 +22,52 @@ const block = top.concat(top.vFlip(), "y");
 const chart = block.repeat(10, 10);
 
 // Substitute palette indices with Op codes: 0 → FKNIT, 1 → BKNIT.
-const ops = chart.remap({ 0: Op.FKNIT, 1: Op.BKNIT });
+const baseChart = chart.remap({ 0: Op.FKNIT, 1: Op.BKNIT });
 
-const yarnFeeder = new Array(ops.height).fill(1);
+const baseFeeder = new Array(baseChart.height).fill(1);
+
+// Insert transfer rows wherever a knit wants to happen on a different
+// bed than the loop currently sits on. For each input row, compare it
+// against the previous row column-by-column: any column whose bed has
+// changed needs a transfer (FTB or BTF) in a prepended row so the loop
+// is on the correct bed before the carriage passes. Transfer rows are
+// only emitted when at least one column actually needs one.
+function bedTransfers(ops, yarnFeeder) {
+  const w = ops.width;
+  const h = ops.height;
+
+  let out = ops.crop(0, 0, w, 1);
+  const outFeeder = [yarnFeeder[0]];
+
+  for (let r = 1; r < h; r++) {
+    const curRow = ops.crop(0, r, w, 1);
+    const prevRow = ops.crop(0, r - 1, w, 1);
+    const xferRow = curRow.map((cur, x) => {
+      const prev = prevRow.pixel(x, 0);
+      if (cur === Op.FKNIT && prev === Op.BKNIT) return Op.BTF;
+      if (cur === Op.BKNIT && prev === Op.FKNIT) return Op.FTB;
+      return Op.EMPTY;
+    });
+
+    if (xferRow.count(Op.EMPTY) < w) {
+      out = out.concat(xferRow, "y");
+      // null yarn marks a transfer-only row (no yarn is being fed).
+      outFeeder.push(null);
+    }
+    out = out.concat(curRow, "y");
+    outFeeder.push(yarnFeeder[r]);
+  }
+
+  return {
+    ops: out,
+    yarnFeeder: outFeeder,
+  };
+}
+
+const result = bedTransfers(baseChart, baseFeeder);
 
 return {
-  ops,
-  yarnFeeder,
+  ops: result.ops,
+  yarnFeeder: result.yarnFeeder,
   palette: ["#a8dadc"],
 };
