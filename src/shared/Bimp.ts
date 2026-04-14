@@ -80,13 +80,18 @@ export class Bimp {
     const filled = Array(paddingY * (this.width + 2 * paddingX)).fill(color);
     const col = Array(paddingX).fill(color);
     const twod = this.make2d();
-    return new Bimp(this.width + 2 * paddingX, this.height + 2 * paddingY, [
-      ...twod.reduce(
-        (acc: number[], row: number[]) => [...acc, ...col, ...row, ...col],
-        [...filled]
-      ),
-      ...filled,
-    ]);
+    return new Bimp(
+      this.width + 2 * paddingX,
+      this.height + 2 * paddingY,
+      [
+        ...twod.reduce(
+          (acc: number[], row: number[]) => [...acc, ...col, ...row, ...col],
+          [...filled]
+        ),
+        ...filled,
+      ],
+      this.palette
+    );
   }
 
   resize(width: number, height: number, emptyColor: number = 0): Bimp {
@@ -98,7 +103,7 @@ export class Bimp {
         );
       }
     }
-    return new Bimp(width, height, resized);
+    return new Bimp(width, height, resized, this.palette);
   }
 
   make2d(): number[][] {
@@ -108,12 +113,13 @@ export class Bimp {
     return newArray;
   }
 
-  vMirror(): Bimp {
-    return new Bimp(this.width, this.height, this.make2d().toReversed().flat());
-  }
-
   vFlip(): Bimp {
-    return new Bimp(this.width, this.height, this.make2d().toReversed().flat());
+    return new Bimp(
+      this.width,
+      this.height,
+      this.make2d().toReversed().flat(),
+      this.palette
+    );
   }
 
   hFlip(): Bimp {
@@ -122,8 +128,212 @@ export class Bimp {
       this.height,
       this.make2d()
         .map((row) => row.toReversed())
-        .flat()
+        .flat(),
+      this.palette
     );
+  }
+
+  // ── Composition ──────────────────────────────────────────────────────────
+
+  crop(x: number, y: number, w: number, h: number): Bimp {
+    const out: number[] = [];
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const sx = x + i;
+        const sy = y + j;
+        const inside =
+          sx >= 0 && sx < this.width && sy >= 0 && sy < this.height;
+        out.push(inside ? this.pixels[sx + sy * this.width] : 0);
+      }
+    }
+    return new Bimp(w, h, out, this.palette);
+  }
+
+  concat(other: Bimp, axis: "x" | "y"): Bimp {
+    if (axis === "x") {
+      if (this.height !== other.height)
+        throw new Error("concat axis=x requires matching height");
+      const w = this.width + other.width;
+      const out: number[] = [];
+      for (let y = 0; y < this.height; y++) {
+        for (let x = 0; x < this.width; x++)
+          out.push(this.pixels[x + y * this.width]);
+        for (let x = 0; x < other.width; x++)
+          out.push(other.pixels[x + y * other.width]);
+      }
+      return new Bimp(w, this.height, out, this.palette);
+    }
+    if (axis === "y") {
+      if (this.width !== other.width)
+        throw new Error("concat axis=y requires matching width");
+      const h = this.height + other.height;
+      const out = new Array<number>(this.width * h);
+      for (let i = 0; i < this.pixels.length; i++) out[i] = this.pixels[i];
+      for (let i = 0; i < other.pixels.length; i++)
+        out[this.pixels.length + i] = other.pixels[i];
+      return new Bimp(this.width, h, out, this.palette);
+    }
+    throw new Error(`concat axis must be "x" or "y"`);
+  }
+
+  repeat(nx: number, ny: number): Bimp {
+    return Bimp.fromTile(this.width * nx, this.height * ny, this);
+  }
+
+  trim(bgColor: number = 0): Bimp {
+    let minX = this.width;
+    let minY = this.height;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (this.pixels[x + y * this.width] !== bgColor) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return new Bimp(0, 0, [], this.palette);
+    return this.crop(minX, minY, maxX - minX + 1, maxY - minY + 1);
+  }
+
+  // ── Rotation / transpose ─────────────────────────────────────────────────
+
+  rotate90(): Bimp {
+    const w = this.height;
+    const h = this.width;
+    const out = new Array<number>(w * h);
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        // (x, y) → (w - 1 - y, x) in the rotated frame
+        out[(this.height - 1 - y) + x * w] = this.pixels[x + y * this.width];
+      }
+    }
+    return new Bimp(w, h, out, this.palette);
+  }
+
+  rotate180(): Bimp {
+    const out = new Array<number>(this.pixels.length);
+    for (let i = 0; i < this.pixels.length; i++) {
+      out[this.pixels.length - 1 - i] = this.pixels[i];
+    }
+    return new Bimp(this.width, this.height, out, this.palette);
+  }
+
+  rotate270(): Bimp {
+    const w = this.height;
+    const h = this.width;
+    const out = new Array<number>(w * h);
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        // (x, y) → (y, h - 1 - x)
+        out[y + (this.width - 1 - x) * w] = this.pixels[x + y * this.width];
+      }
+    }
+    return new Bimp(w, h, out, this.palette);
+  }
+
+  transpose(): Bimp {
+    const w = this.height;
+    const h = this.width;
+    const out = new Array<number>(w * h);
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        out[y + x * w] = this.pixels[x + y * this.width];
+      }
+    }
+    return new Bimp(w, h, out, this.palette);
+  }
+
+  // ── Value mapping ────────────────────────────────────────────────────────
+
+  map(fn: (value: number, x: number, y: number) => number): Bimp {
+    const out = new Array<number>(this.pixels.length);
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const i = x + y * this.width;
+        out[i] = fn(this.pixels[i], x, y);
+      }
+    }
+    return new Bimp(this.width, this.height, out, this.palette);
+  }
+
+  replace(oldColor: number, newColor: number): Bimp {
+    return this.map((v) => (v === oldColor ? newColor : v));
+  }
+
+  remap(table: Record<number, number> | number[]): Bimp {
+    const isArr = Array.isArray(table);
+    return this.map((v) => {
+      const replacement = isArr
+        ? (table as number[])[v]
+        : (table as Record<number, number>)[v];
+      return replacement === undefined ? v : replacement;
+    });
+  }
+
+  // ── Inspection ───────────────────────────────────────────────────────────
+
+  uniqueValues(): number[] {
+    const seen = new Set<number>();
+    for (let i = 0; i < this.pixels.length; i++) seen.add(this.pixels[i]);
+    return Array.from(seen).sort((a, b) => a - b);
+  }
+
+  count(color: number): number {
+    let n = 0;
+    for (let i = 0; i < this.pixels.length; i++) {
+      if (this.pixels[i] === color) n++;
+    }
+    return n;
+  }
+
+  equals(other: Bimp): boolean {
+    if (this.width !== other.width || this.height !== other.height)
+      return false;
+    if (this.pixels.length !== other.pixels.length) return false;
+    for (let i = 0; i < this.pixels.length; i++) {
+      if (this.pixels[i] !== other.pixels[i]) return false;
+    }
+    return true;
+  }
+
+  forEach(fn: (value: number, x: number, y: number) => void): void {
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        fn(this.pixels[x + y * this.width], x, y);
+      }
+    }
+  }
+
+  // ── Palette helpers ──────────────────────────────────────────────────────
+
+  withPalette(
+    palette?: (string | { color: string; label?: string })[]
+  ): Bimp {
+    return new Bimp(this.width, this.height, this.pixels, palette);
+  }
+
+  // ── Drawing primitive ────────────────────────────────────────────────────
+
+  circle(center: Vec2, radius: number, color: number): Bimp {
+    const [cx, cy] = center;
+    const changes: PixelChange[] = [];
+    const r2 = radius * radius;
+    const minX = Math.max(0, Math.floor(cx - radius));
+    const maxX = Math.min(this.width - 1, Math.ceil(cx + radius));
+    const minY = Math.max(0, Math.floor(cy - radius));
+    const maxY = Math.min(this.height - 1, Math.ceil(cy + radius));
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - cx;
+        const dy = y - cy;
+        if (dx * dx + dy * dy <= r2) changes.push({ x, y, color });
+      }
+    }
+    return this.draw(changes);
   }
 
   pixel(x: number, y: number): number {
@@ -145,7 +355,7 @@ export class Bimp {
       if (x < 0 || y < 0 || x >= this.width || y >= this.height) continue;
       copy[x + y * this.width] = color;
     }
-    return new Bimp(this.width, this.height, copy);
+    return new Bimp(this.width, this.height, copy, this.palette);
   }
 
   indexedDraw(changes: IndexedChange[]): Bimp {
@@ -154,7 +364,7 @@ export class Bimp {
       if (index >= this.pixels.length) continue;
       copy[index] = color;
     }
-    return new Bimp(this.width, this.height, copy);
+    return new Bimp(this.width, this.height, copy, this.palette);
   }
 
   indexedBrush(index: number, color: number): Bimp {

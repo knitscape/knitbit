@@ -157,15 +157,15 @@ export function view(state: AppState, handlers: ViewHandlers) {
                 </button>
                 <button
                   class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
-                  title="Help"
-                  @click=${handlers.onToggleHelp}>
-                  <i class="fa-solid fa-question"></i>
-                </button>
-                <button
-                  class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
                   title="Download this script as a .js file"
                   @click=${handlers.onDownloadScript}>
                   <i class="fa-solid fa-download"></i>
+                </button>
+                <button
+                  class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                  title="Help"
+                  @click=${handlers.onToggleHelp}>
+                  <i class="fa-solid fa-question"></i>
                 </button>
               </div>
             </div>
@@ -346,12 +346,32 @@ export function view(state: AppState, handlers: ViewHandlers) {
               Preview
             </span>
             <div class="flex items-center gap-[0.3rem]">
-              <button
-                class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.55rem] text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.04em] uppercase rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
-                title="Toggle between technical (row-based) and compressed (per-needle count) layout"
-                @click=${handlers.onToggleLayoutMode}>
-                ${state.layoutMode === "technical" ? "technical" : "compressed"}
-              </button>
+              <div
+                class="flex border border-[color:var(--base4)] rounded-[3px] overflow-hidden"
+                title="Toggle between technical (row-based) and compressed (per-needle count) layout">
+                <button
+                  class=${`py-[0.2rem] px-[0.55rem] text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.04em] uppercase text-[color:var(--base12)] cursor-pointer [transition:background_80ms] ${
+                    state.layoutMode === "technical"
+                      ? "bg-[var(--base4)]"
+                      : "bg-[var(--base2)] hover:bg-[var(--base3)]"
+                  }`}
+                  @click=${() =>
+                    state.layoutMode !== "technical" &&
+                    handlers.onToggleLayoutMode()}>
+                  technical
+                </button>
+                <button
+                  class=${`py-[0.2rem] px-[0.55rem] text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.04em] uppercase text-[color:var(--base12)] cursor-pointer [transition:background_80ms] [border-left:1px_solid_var(--base4)] ${
+                    state.layoutMode === "compressed"
+                      ? "bg-[var(--base4)]"
+                      : "bg-[var(--base2)] hover:bg-[var(--base3)]"
+                  }`}
+                  @click=${() =>
+                    state.layoutMode !== "compressed" &&
+                    handlers.onToggleLayoutMode()}>
+                  compressed
+                </button>
+              </div>
               <button
                 class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
                 title="Fit view"
@@ -829,6 +849,28 @@ function pickTextColor(bg: string): string {
   return lum > 0.55 ? "#111" : "#fff";
 }
 
+function bimpMethodTable(title: string, rows: [string, string][]) {
+  return html`<div class="mb-4">
+    <h4
+      class="text-[0.68rem] [font-variation-settings:'wght'_600] tracking-[0.06em] uppercase text-[color:var(--base8)] mb-1">
+      ${title}
+    </h4>
+    <table class="w-full text-[0.78rem]">
+      <tbody>
+        ${rows.map(
+          ([sig, desc]) => html`<tr class="align-top">
+            <td
+              class="py-[0.2rem] pr-4 font-mono text-[color:var(--base13)] whitespace-nowrap">
+              ${sig}
+            </td>
+            <td class="py-[0.2rem] text-[color:var(--base10)]">${desc}</td>
+          </tr>`
+        )}
+      </tbody>
+    </table>
+  </div>`;
+}
+
 function helpModal(handlers: ViewHandlers) {
   return html`
     <div
@@ -1075,36 +1117,68 @@ function helpModal(handlers: ViewHandlers) {
               class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mb-2">
               Available globals
             </h3>
-            <p class="text-[color:var(--base10)]">
-              <code class="font-mono text-[color:var(--base13)]">Bimp</code> —
-              bitmap class. Construct with
-              <code class="font-mono">new Bimp(w, h, pixels)</code> or the
-              static helpers
-              <code class="font-mono">Bimp.empty</code>,
-              <code class="font-mono">Bimp.fromTile</code>,
-              <code class="font-mono">Bimp.fromJSON</code>. Instances are
-              immutable — methods like
-              <code class="font-mono">draw</code>,
-              <code class="font-mono">overlay</code>,
-              <code class="font-mono">rect</code>,
-              <code class="font-mono">line</code>,
-              <code class="font-mono">flood</code>,
-              <code class="font-mono">shift</code>,
-              <code class="font-mono">hFlip</code>,
-              <code class="font-mono">vFlip</code> return new Bimps.
+            <p class="text-[color:var(--base10)] mb-3">
+              <code class="font-mono text-[color:var(--base13)]">Bimp</code>
+              is an immutable bitmap class. Every method that transforms
+              pixels returns a new <code class="font-mono">Bimp</code>.
+              <code class="font-mono text-[color:var(--base13)]">Op</code>
+              is the enum above.
             </p>
-            <p class="mt-2 text-[color:var(--base10)]">
-              <code class="font-mono text-[color:var(--base13)]">Op</code> —
-              the enum above.
-            </p>
-            <p class="mt-2 text-[color:var(--base10)]">
+            <p class="mb-3 text-[color:var(--base10)]">
               The optional 4th arg to <code class="font-mono">new Bimp</code>
-              is a palette for the bitmap editor. Each entry may be either
-              a bare hex string (<code class="font-mono">"#f00"</code>) or
-              an object
+              is a palette (for the inline bitmap editor). Each entry is
+              either a hex string
+              (<code class="font-mono">"#f00"</code>) or an object
               <code class="font-mono">{ color: "#f00", label: "main" }</code>
-              — the label is shown and editable next to each swatch.
+              — the label is editable next to each swatch.
             </p>
+            ${bimpMethodTable("Constructors", [
+              ["new Bimp(w, h, pixels, palette?)", "Raw construction. pixels is any ArrayLike<number>."],
+              ["Bimp.empty(w, h, color)", "Uniform fill."],
+              ["Bimp.fromTile(w, h, tile)", "Repeat a Bimp to fill w × h. Palette flows through."],
+              ["Bimp.fromJSON({width, height, pixels})", "Deserialize."],
+            ])}
+            ${bimpMethodTable("Read / inspect", [
+              ["pixel(x, y)", "Value at (x, y); -1 if out of bounds."],
+              ["pixelAt(x, y)", "Same, but negative indices wrap (x = -1 → last column)."],
+              ["make2d()", "Return pixels as number[height][width]."],
+              ["uniqueValues()", "Sorted array of distinct pixel values."],
+              ["count(color)", "Number of cells equal to color."],
+              ["equals(other)", "Same dimensions and pixels (palette ignored)."],
+              ["forEach(fn)", "Call fn(value, x, y) on every pixel."],
+              ["toJSON()", "{ width, height, pixels } plain object."],
+            ])}
+            ${bimpMethodTable("Draw", [
+              ["brush(pos, color)", "Set one pixel."],
+              ["draw(changes)", "Bulk: [{x, y, color}, …]."],
+              ["indexedDraw(changes)", "Bulk by linear index: [{index, color}, …]."],
+              ["rect(start, end, color)", "Filled rectangle. start / end are [x, y]."],
+              ["line(from, to, color)", "Rasterized line."],
+              ["circle(center, radius, color)", "Filled disk."],
+              ["flood(pos, color)", "4-way flood fill from pos."],
+              ["overlay(other, pos, skip?, avoid?)", "Paste other at pos. skip = source value to skip; avoid = dest value not to overwrite."],
+            ])}
+            ${bimpMethodTable("Compose / reshape", [
+              ["crop(x, y, w, h)", "Extract sub-rectangle. Out-of-bounds cells fill with 0."],
+              ["concat(other, axis)", `Stack side-by-side ("x") or top-to-bottom ("y"). Throws on mismatched cross-dimension.`],
+              ["repeat(nx, ny)", "Tile this Bimp nx × ny times."],
+              ["trim(bgColor = 0)", "Crop to the bounding box of non-background pixels."],
+              ["pad(padX, padY, color)", "Add a uniform border."],
+              ["resize(w, h, emptyColor = 0)", "Reshape anchored at top-left; new cells get emptyColor."],
+            ])}
+            ${bimpMethodTable("Orient / reflect", [
+              ["hFlip()", "Mirror horizontally."],
+              ["vFlip()", "Mirror vertically."],
+              ["rotate90() / rotate180() / rotate270()", "Rotate (clockwise). 90° / 270° swap width and height."],
+              ["transpose()", "Swap axes: out.pixel(y, x) === this.pixel(x, y)."],
+              ["shift(dx, dy)", "Shift all pixels with wrap-around."],
+            ])}
+            ${bimpMethodTable("Value mapping / palette", [
+              ["map(fn)", "Call fn(value, x, y) → newValue on every pixel."],
+              ["replace(oldColor, newColor)", "Swap one value everywhere."],
+              ["remap(table)", "Lookup replacement. Array: table[old] = new. Object: { [old]: new }. Missing keys pass through."],
+              ["withPalette(palette?)", "Return a copy with the palette replaced (or cleared)."],
+            ])}
           </section>
         </div>
       </div>

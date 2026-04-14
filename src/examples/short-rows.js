@@ -1,3 +1,5 @@
+// This example uses black to represent the regions where we won't knit,
+// and colors to represent where we want the yarns to go.
 const base = new Bimp(
   20,
   20,
