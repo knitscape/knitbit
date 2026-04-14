@@ -55,110 +55,99 @@ export function yarnRelaxation(settings: RelaxSettings) {
     f2[2] -= fz;
   }
 
-  function torsion(
+  // Discrete Elastic Rod bending at one interior polyline vertex.
+  //
+  // Three consecutive offset-points p0, p1, p2 (each = node.pos + offset)
+  // define two edges e0 = p1-p0, e1 = p2-p1. The turning angle
+  //   θ = atan2(|e0 × e1|, e0 · e1)
+  // is 0 when the rod is straight, π when fully reversed.
+  //
+  // Bending energy (isotropic, zero rest curvature):
+  //   E = k_b · θ² / l̄,     l̄ = (|e0| + |e1|) / 2
+  //
+  // Force at each endpoint points perpendicular to its incident edge,
+  // inside the bending plane, toward "straighter":
+  //   F0 = -(2 k_b θ)/(l̄ · |e0|) · (b × t0)
+  //   F2 = -(2 k_b θ)/(l̄ · |e1|) · (b × t1)
+  //   F1 = -(F0 + F2)                    (net force = 0; translational inv.)
+  //
+  // where b = unit(e0 × e1), t0 = e0/|e0|, t1 = e1/|e1|. Forces on the
+  // offset-points are applied to the underlying NODE centers — nodes don't
+  // carry orientation DOFs, so the offset lever arm doesn't add a torque.
+  function bending(
     nodes: NodeType[],
-    seg1: ResolvedSegment,
-    seg2: ResolvedSegment,
-    seg3: ResolvedSegment
+    n0: number,
+    o0: number[],
+    n1: number,
+    o1: number[],
+    n2: number,
+    o2: number[]
   ): void {
-    const n1t = nodes[seg1.target].pos;
-    const n2s = nodes[seg2.source].pos;
-    const n2t = nodes[seg2.target].pos;
-    const n3s = nodes[seg3.source].pos;
-    const s1to = seg1.targetOffset;
-    const s2so = seg2.sourceOffset;
-    const s2to = seg2.targetOffset;
-    const s3so = seg3.sourceOffset;
+    const p0 = nodes[n0].pos;
+    const p1 = nodes[n1].pos;
+    const p2 = nodes[n2].pos;
 
-    // Segment tangent vectors: v01 = p1 - p0, v12 = p2 - p1, v23 = p3 - p2
-    const v01x = n2s[0] + s2so[0] - n1t[0] - s1to[0];
-    const v01y = n2s[1] + s2so[1] - n1t[1] - s1to[1];
-    const v01z = n2s[2] + s2so[2] - n1t[2] - s1to[2];
-    const v12x = n2t[0] + s2to[0] - n2s[0] - s2so[0];
-    const v12y = n2t[1] + s2to[1] - n2s[1] - s2so[1];
-    const v12z = n2t[2] + s2to[2] - n2s[2] - s2so[2];
-    const v23x = n3s[0] + s3so[0] - n2t[0] - s2to[0];
-    const v23y = n3s[1] + s3so[1] - n2t[1] - s2to[1];
-    const v23z = n3s[2] + s3so[2] - n2t[2] - s2to[2];
+    const e0x = p1[0] + o1[0] - p0[0] - o0[0];
+    const e0y = p1[1] + o1[1] - p0[1] - o0[1];
+    const e0z = p1[2] + o1[2] - p0[2] - o0[2];
+    const e1x = p2[0] + o2[0] - p1[0] - o1[0];
+    const e1y = p2[1] + o2[1] - p1[1] - o1[1];
+    const e1z = p2[2] + o2[2] - p1[2] - o1[2];
 
-    // Normalize each. Mirroring Vec3.normalize, return zeros when too short.
-    const l01 = Math.sqrt(v01x * v01x + v01y * v01y + v01z * v01z);
-    const l12 = Math.sqrt(v12x * v12x + v12y * v12y + v12z * v12z);
-    const l23 = Math.sqrt(v23x * v23x + v23y * v23y + v23z * v23z);
-    const i01 = l01 > EPS ? 1 / l01 : 0;
-    const i12 = l12 > EPS ? 1 / l12 : 0;
-    const i23 = l23 > EPS ? 1 / l23 : 0;
-    const t01x = v01x * i01;
-    const t01y = v01y * i01;
-    const t01z = v01z * i01;
-    const t12x = v12x * i12;
-    const t12y = v12y * i12;
-    const t12z = v12z * i12;
-    const t23x = v23x * i23;
-    const t23y = v23y * i23;
-    const t23z = v23z * i23;
+    const l0 = Math.sqrt(e0x * e0x + e0y * e0y + e0z * e0z);
+    const l1 = Math.sqrt(e1x * e1x + e1y * e1y + e1z * e1z);
+    if (l0 <= EPS || l1 <= EPS) return;
 
-    // B1 = T01 × T12, B2 = T12 × T23
-    const b1x = t01y * t12z - t01z * t12y;
-    const b1y = t01z * t12x - t01x * t12z;
-    const b1z = t01x * t12y - t01y * t12x;
-    const b2x = t12y * t23z - t12z * t23y;
-    const b2y = t12z * t23x - t12x * t23z;
-    const b2z = t12x * t23y - t12y * t23x;
+    const cx = e0y * e1z - e0z * e1y;
+    const cy = e0z * e1x - e0x * e1z;
+    const cz = e0x * e1y - e0y * e1x;
+    const crossMag = Math.sqrt(cx * cx + cy * cy + cz * cz);
+    if (crossMag <= EPS) return; // parallel/antiparallel → binormal undefined
 
-    const bl1 = Math.sqrt(b1x * b1x + b1y * b1y + b1z * b1z);
-    const bl2 = Math.sqrt(b2x * b2x + b2y * b2y + b2z * b2z);
-    const ib1 = bl1 > EPS ? 1 / bl1 : 0;
-    const ib2 = bl2 > EPS ? 1 / bl2 : 0;
-    const b1nx = b1x * ib1;
-    const b1ny = b1y * ib1;
-    const b1nz = b1z * ib1;
-    const b2nx = b2x * ib2;
-    const b2ny = b2y * ib2;
-    const b2nz = b2z * ib2;
+    const dot = e0x * e1x + e0y * e1y + e0z * e1z;
+    const theta = Math.atan2(crossMag, dot);
+    if (theta <= EPS) return;
 
-    // omega = -acos(dot(B1n, B2n)), clamped to avoid NaN from FP drift.
-    let dot = b1nx * b2nx + b1ny * b2ny + b1nz * b2nz;
-    if (dot > 1) dot = 1;
-    else if (dot < -1) dot = -1;
-    let omega = -Math.acos(dot);
+    // b = unit(e0 × e1)
+    const invC = 1 / crossMag;
+    const bx = cx * invC;
+    const by = cy * invC;
+    const bz = cz * invC;
 
-    // Sign-flip: if T12 · (B1 × B2) < 0 the bend winds the other way.
-    const cbx = b1y * b2z - b1z * b2y;
-    const cby = b1z * b2x - b1x * b2z;
-    const cbz = b1x * b2y - b1y * b2x;
-    if (t12x * cbx + t12y * cby + t12z * cbz < 0) omega = -omega;
+    // t0 = e0/l0, t1 = e1/l1 — inlined with 1/l0 and 1/l1 into the coeffs.
+    const lBar = 0.5 * (l0 + l1);
+    const k = 2 * settings.tYarn * ALPHA * theta / lBar;
+    const c0 = -k / l0; // scales (b × t0) = (b × e0) / l0 → extra /l0 factor
+    const c2 = -k / l1;
 
-    if (omega !== omega) return; // NaN
-    const mag = settings.tYarn * ALPHA * omega;
-    if (mag === 0) return;
+    // b × e0 (we use e0 rather than t0 and absorb the extra /l0 into c0)
+    const bxe0x = by * e0z - bz * e0y;
+    const bxe0y = bz * e0x - bx * e0z;
+    const bxe0z = bx * e0y - by * e0x;
+    const bxe1x = by * e1z - bz * e1y;
+    const bxe1y = bz * e1x - bx * e1z;
+    const bxe1z = bx * e1y - by * e1x;
 
-    const m1x = b1nx * mag;
-    const m1y = b1ny * mag;
-    const m1z = b1nz * mag;
-    const m2x = b2nx * mag;
-    const m2y = b2ny * mag;
-    const m2z = b2nz * mag;
+    const f0x = (c0 / l0) * bxe0x;
+    const f0y = (c0 / l0) * bxe0y;
+    const f0z = (c0 / l0) * bxe0z;
+    const f2x = (c2 / l1) * bxe1x;
+    const f2y = (c2 / l1) * bxe1y;
+    const f2z = (c2 / l1) * bxe1z;
 
-    // Apply as two balanced force couples:
-    // (+f1 on seg2.source, -f1 on seg1.source) torques seg1 around its joint,
-    // (-f2 on seg2.target, +f2 on seg3.target) torques seg3 around its joint.
-    const f_2s = nodes[seg2.source].f;
-    f_2s[0] += m1x;
-    f_2s[1] += m1y;
-    f_2s[2] += m1z;
-    const f_2t = nodes[seg2.target].f;
-    f_2t[0] -= m2x;
-    f_2t[1] -= m2y;
-    f_2t[2] -= m2z;
-    const f_1s = nodes[seg1.source].f;
-    f_1s[0] -= m1x;
-    f_1s[1] -= m1y;
-    f_1s[2] -= m1z;
-    const f_3t = nodes[seg3.target].f;
-    f_3t[0] += m2x;
-    f_3t[1] += m2y;
-    f_3t[2] += m2z;
+    const fn0 = nodes[n0].f;
+    const fn1 = nodes[n1].f;
+    const fn2 = nodes[n2].f;
+    fn0[0] += f0x;
+    fn0[1] += f0y;
+    fn0[2] += f0z;
+    fn2[0] += f2x;
+    fn2[1] += f2y;
+    fn2[2] += f2z;
+    // F1 = -(F0 + F2) — keeps net force zero
+    fn1[0] -= f0x + f2x;
+    fn1[1] -= f0y + f2y;
+    fn1[2] -= f0z + f2z;
   }
 
   function updatePositions(nodes: NodeType[]): void {
@@ -200,11 +189,49 @@ export function yarnRelaxation(settings: RelaxSettings) {
       for (let y = 0; y < yarnList.length; y++) {
         const segArr = yarnList[y];
         const n = segArr.length;
+
+        // Stretching — one spring per segment.
         for (let s = 0; s < n; s++) {
           applyYarnForce(nodes, segArr[s], kYarn);
         }
-        for (let s = 1; s + 1 < n; s++) {
-          torsion(nodes, segArr[s - 1], segArr[s], segArr[s + 1]);
+
+        // Bending — the yarn is a 2N-point zig-zag polyline: each segment
+        // contributes a source-offset point and a target-offset point, with
+        // a "crossover" edge spanning the offset discontinuity at each
+        // shared node. Interior vertices come in two flavors:
+        //
+        //   • crossover→body: prev segment's target-offset, this segment's
+        //     source-offset, this segment's target-offset
+        //   • body→crossover: this segment's source-offset, this segment's
+        //     target-offset, next segment's source-offset
+        //
+        // Visiting each once covers all 2N-2 interior vertices with no
+        // double counting.
+        for (let s = 1; s < n; s++) {
+          const prev = segArr[s - 1];
+          const cur = segArr[s];
+          bending(
+            nodes,
+            prev.target,
+            prev.targetOffset,
+            cur.source,
+            cur.sourceOffset,
+            cur.target,
+            cur.targetOffset
+          );
+        }
+        for (let s = 0; s + 1 < n; s++) {
+          const cur = segArr[s];
+          const next = segArr[s + 1];
+          bending(
+            nodes,
+            cur.source,
+            cur.sourceOffset,
+            cur.target,
+            cur.targetOffset,
+            next.source,
+            next.sourceOffset
+          );
         }
       }
 
