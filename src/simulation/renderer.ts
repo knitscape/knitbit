@@ -73,10 +73,17 @@ void main() {
     float depth = lightPos.z - bias;
     float texelSize = 1.0 / 2048.0;
     float lit = 0.0;
-    for (int x = -1; x <= 1; x++) {
-        for (int y = -1; y <= 1; y++) {
-            float d = unpackRGBA(texture2D(tShadow, lightPos.xy + vec2(x, y) * texelSize));
-            lit += step(depth, d);
+    bool inFrustum = lightPos.x >= 0.0 && lightPos.x <= 1.0
+                  && lightPos.y >= 0.0 && lightPos.y <= 1.0
+                  && lightPos.z <= 1.0;
+    if (!inFrustum) {
+        lit = 9.0;
+    } else {
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                float d = unpackRGBA(texture2D(tShadow, lightPos.xy + vec2(x, y) * texelSize));
+                lit += step(depth, d);
+            }
         }
     }
     float facing = smoothstep(-0.1, 0.3, vFacing);
@@ -387,13 +394,42 @@ function computeLightMatrices(bbox: any) {
   const lightTarget = bbox.center;
   const lightCameraMatrix = Mat4.lookAt(lightPos, lightTarget, [0, 1, 0]);
   shadowViewMatrix = Mat4.inverse(lightCameraMatrix);
+
+  const corners = [
+    [bbox.xMin, bbox.yMin, bbox.zMin, 1],
+    [bbox.xMax, bbox.yMin, bbox.zMin, 1],
+    [bbox.xMin, bbox.yMax, bbox.zMin, 1],
+    [bbox.xMax, bbox.yMax, bbox.zMin, 1],
+    [bbox.xMin, bbox.yMin, bbox.zMax, 1],
+    [bbox.xMax, bbox.yMin, bbox.zMax, 1],
+    [bbox.xMin, bbox.yMax, bbox.zMax, 1],
+    [bbox.xMax, bbox.yMax, bbox.zMax, 1],
+  ];
+
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  let minZ = Infinity, maxZ = -Infinity;
+  for (const c of corners) {
+    const v = Mat4.transformVector(shadowViewMatrix, c);
+    if (v[0] < minX) minX = v[0];
+    if (v[0] > maxX) maxX = v[0];
+    if (v[1] < minY) minY = v[1];
+    if (v[1] > maxY) maxY = v[1];
+    if (v[2] < minZ) minZ = v[2];
+    if (v[2] > maxZ) maxZ = v[2];
+  }
+
+  const padX = (maxX - minX) * 0.05;
+  const padY = (maxY - minY) * 0.05;
+  const padZ = (maxZ - minZ) * 0.05;
+
   shadowProjectionMatrix = Mat4.orthographic(
-    -bbox.dimensions[0],
-    bbox.dimensions[0],
-    -bbox.dimensions[1],
-    bbox.dimensions[1],
-    0.1,
-    100
+    minX - padX,
+    maxX + padX,
+    minY - padY,
+    maxY + padY,
+    -maxZ - padZ,
+    -minZ + padZ
   );
 }
 
@@ -494,6 +530,8 @@ function draw() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);
   gl.disable(gl.CULL_FACE);
+  gl.enable(gl.POLYGON_OFFSET_FILL);
+  gl.polygonOffset(4.0, 8.0);
 
   for (const yarn of yarns) {
     setDepthUniforms(segmentDepthProgram, shadowViewMatrix, shadowProjectionMatrix, yarn.diameter);
@@ -504,6 +542,8 @@ function draw() {
     gl.bindVertexArray(yarn.joinDepthVAO);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, yarn.joinCount);
   }
+
+  gl.disable(gl.POLYGON_OFFSET_FILL);
 
   // Main pass
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
