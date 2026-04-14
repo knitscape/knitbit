@@ -69,7 +69,6 @@ const liveRelaxSettings: RelaxSettings = { ...DEFAULT_RELAX_SETTINGS };
 
 // Simulation handles
 let simDraw: (() => void) | undefined;
-let simStop: (() => void) | undefined;
 let simRelax: (() => void) | undefined;
 let simRestart: (() => void) | undefined;
 let simIsRelaxing: (() => boolean) | undefined;
@@ -77,6 +76,8 @@ let simGetTickMs: (() => number) | undefined;
 let simGetAlpha: (() => number) | undefined;
 let simFitCamera: (() => void) | undefined;
 let simSetMaxStitch: ((n: number) => void) | undefined;
+let simUpdateSettings: ((partial: Partial<RelaxSettings>) => void) | undefined;
+let simTerminate: (() => void) | undefined;
 
 let needsRender = true;
 
@@ -204,9 +205,8 @@ function updateScrubHighlight() {
 function initSimulation(resetCamera = true) {
   if (!lastProgram) return;
 
-  if (simStop) {
-    simStop();
-    simStop = undefined;
+  if (simTerminate) {
+    simTerminate();
     simDraw = undefined;
     simRelax = undefined;
     simRestart = undefined;
@@ -214,6 +214,8 @@ function initSimulation(resetCamera = true) {
     simGetTickMs = undefined;
     simGetAlpha = undefined;
     simSetMaxStitch = undefined;
+    simUpdateSettings = undefined;
+    simTerminate = undefined;
   }
 
   const simCanvas = document.getElementById(
@@ -231,7 +233,6 @@ function initSimulation(resetCamera = true) {
   });
 
   simDraw = result.draw;
-  simStop = result.stopSim;
   simRelax = result.relax;
   simRestart = result.restart;
   simIsRelaxing = result.isRelaxing;
@@ -239,6 +240,8 @@ function initSimulation(resetCamera = true) {
   simGetAlpha = result.getAlpha;
   simFitCamera = result.fitCamera;
   simSetMaxStitch = result.setMaxStitch;
+  simUpdateSettings = result.updateSettings;
+  simTerminate = result.terminate;
   setState({ simState: "idle", topologyMs: result.topologyMs, tickMs: 0 });
 }
 
@@ -658,8 +661,9 @@ const handlers: ViewHandlers = {
   onRelaxSettingChange: (key, value) => {
     (liveRelaxSettings[key] as number) = value as number;
     setState({ relaxSettings: { ...liveRelaxSettings } });
-
-    
+    // Push the change into the worker so it takes effect on the next tick,
+    // then restart to re-anneal α and show the new parameter's behavior.
+    if (simUpdateSettings) simUpdateSettings({ [key]: value });
     if (simRestart) {
       simRestart();
       setState({ simState: "relaxing" });
@@ -668,6 +672,7 @@ const handlers: ViewHandlers = {
   onResetRelaxSettings: () => {
     Object.assign(liveRelaxSettings, DEFAULT_RELAX_SETTINGS);
     setState({ relaxSettings: { ...liveRelaxSettings } });
+    if (simUpdateSettings) simUpdateSettings(DEFAULT_RELAX_SETTINGS);
     if (simRestart) {
       simRestart();
       setState({ simState: "relaxing" });

@@ -1,5 +1,4 @@
 import { hexToRgb } from "../shared/hexToRgb";
-import { yarnRelaxation } from "./relaxation";
 import {
   segmentsToPoints,
   computeYarnPathSpline,
@@ -12,6 +11,10 @@ import {
   type LayoutMode,
   type RelaxSettings,
 } from "./types";
+import type {
+  WorkerCommand,
+  WorkerTick,
+} from "./relaxation.worker";
 
 import { noodleRenderer } from "./renderer";
 
@@ -43,9 +46,12 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
   const layoutMode: LayoutMode = options.layoutMode ?? "technical";
   const relaxSettings: RelaxSettings =
     options.relaxSettings ?? { ...DEFAULT_RELAX_SETTINGS };
-  let relaxed = false;
-  let sim: ReturnType<typeof yarnRelaxation> | undefined;
+
+  // Worker state mirrored on the main thread for the panel readouts.
   let lastTickMs = 0;
+  let currentAlpha = 1;
+  let running = false;
+  let everStarted = false;
 
   function buildGeometry(maxStitch: number) {
     const topology = generateTopology(program, layoutMode, maxStitch);
@@ -78,50 +84,94 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
 
   renderer.init(yarnData, canvas, options.resetCamera ?? true);
 
+  // ─── Worker wiring ──────────────────────────────────────────────────────────
+
+  const worker = new Worker(
+    new URL("./relaxation.worker.ts", import.meta.url),
+    { type: "module" }
+  );
+
+  const send = (msg: WorkerCommand, transfer?: Transferable[]) => {
+    worker.postMessage(msg, transfer ?? []);
+  };
+
+  function sendInit() {
+    send({
+      type: "init",
+      nodes,
+      segments,
+      settings: relaxSettings,
+    });
+  }
+
+  // Worker posts new control points per tick. We copy them into yarnData so
+  // the existing renderer pipeline (updateYarnGeometry → draw) picks them up
+  // on the next animation frame. The array is Float32Array → number[] because
+  // buildYarnCurve is typed for number[]; the copy is cheap vs. a tick.
+  worker.onmessage = (e: MessageEvent<WorkerTick>) => {
+    const msg = e.data;
+    if (msg.type !== "tick") return;
+    for (const yd of yarnData) {
+      const key = Number(yd.yarnIndex);
+      const arr = msg.pts[key];
+      if (arr) yd.pts = Array.from(arr);
+    }
+    currentAlpha = msg.alpha;
+    lastTickMs = msg.tickMs;
+    running = msg.running;
+  };
+
+  sendInit();
+
+  // ─── Public API ─────────────────────────────────────────────────────────────
+
   function draw() {
-    if (sim && sim.running()) {
-      const tickStart = performance.now();
-      sim.tick(segments as any, nodes);
-
-      for (let i = 0; i < yarnData.length; i++) {
-        yarnData[i].pts = segmentsToPoints(
-          segments[Number(yarnData[i].yarnIndex)],
-          nodes
-        );
-      }
-
+    // The tick loop now runs in the worker; the main thread just keeps the
+    // renderer fed with whatever pts arrived most recently.
+    if (everStarted) {
       renderer.updateYarnGeometry(yarnData);
-      lastTickMs = performance.now() - tickStart;
     }
     renderer.draw();
   }
 
   function relax() {
-    if (relaxed) return;
-    sim = yarnRelaxation(relaxSettings);
-    relaxed = true;
+    if (everStarted) return;
+    send({ type: "start" });
+    running = true;
+    everStarted = true;
   }
 
   function restart() {
-    if (sim) sim.stop();
-    sim = yarnRelaxation(relaxSettings);
-    relaxed = true;
+    send({ type: "restart" });
+    running = true;
+    everStarted = true;
   }
 
   function stopSim() {
-    if (sim) sim.stop();
+    send({ type: "stop" });
+    running = false;
   }
 
   function isRelaxing() {
-    return sim !== undefined && sim.running();
+    return running;
+  }
+
+  function updateSettings(partial: Partial<RelaxSettings>) {
+    Object.assign(relaxSettings, partial);
+    send({ type: "setSettings", settings: partial });
   }
 
   function setMaxStitch(n: number) {
-    if (sim) sim.stop();
-    sim = undefined;
-    relaxed = false;
+    send({ type: "stop" });
+    running = false;
+    everStarted = false;
     ({ nodes, segments, yarnData } = buildGeometry(n));
     renderer.init(yarnData, canvas, false);
+    sendInit();
+  }
+
+  function terminate() {
+    worker.terminate();
   }
 
   return {
@@ -131,9 +181,11 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
     draw,
     isRelaxing,
     setMaxStitch,
+    updateSettings,
+    terminate,
     topologyMs,
     getTickMs: () => lastTickMs,
-    getAlpha: () => sim?.alpha() ?? 1,
+    getAlpha: () => currentAlpha,
     fitCamera: () => renderer.fitCamera(),
   };
 }
