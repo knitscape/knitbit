@@ -16,6 +16,7 @@ import {
   getEditorCode,
   setEditorCode,
   replaceBimpExpression,
+  formatBimpExpression,
   type BimpEditTarget,
 } from "./editor";
 import { EXAMPLES } from "./examples";
@@ -38,6 +39,7 @@ let state: AppState = {
   editingBimp: null,
   maxStitch: 0,
   totalStitches: 0,
+  autoRun: false,
 };
 
 // Last successful program — kept so we can re-render on zoom/mode changes
@@ -102,15 +104,9 @@ function stitchToRowCol(
     for (let i = 0; i < w; i++) {
       const col = dir === "right" ? i : w - 1 - i;
       const op = program.ops.pixel(col, row);
-      if (
-        op === Op.FKNIT ||
-        op === Op.FTUCK ||
-        op === Op.BKNIT ||
-        op === Op.BTUCK
-      ) {
-        count++;
-        if (count === n) return { row, col };
-      }
+      if (op === Op.MISS) continue;
+      count++;
+      if (count === n) return { row, col };
     }
   }
   return null;
@@ -207,7 +203,7 @@ function relaxSimulation() {
 
 // ─── Run logic ────────────────────────────────────────────────────────────────
 
-function runWithCode(code: string) {
+function runWithCode(code: string, resetView = false) {
   try {
     const program = runScript(code);
     lastProgram = program;
@@ -215,16 +211,23 @@ function runWithCode(code: string) {
     const w = program.width;
     const h = program.height;
     const total = countStitches(program);
+
+    // If the user was scrubbing, keep their position (clamped to the new
+    // total) instead of jumping back to the end on every re-run.
+    const nextMaxStitch = resetView
+      ? total
+      : Math.min(state.maxStitch, total);
+
     setState({
       statusText: `OK \u2014 ${w}\u00d7${h}`,
       statusClass: "text-green-400",
       totalStitches: total,
-      maxStitch: total,
+      maxStitch: nextMaxStitch,
     });
 
     renderChart();
     updateScrubHighlight();
-    initSimulation();
+    initSimulation(resetView);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     setState({ statusText: `Error: ${msg}`, statusClass: "text-red-400" });
@@ -232,16 +235,38 @@ function runWithCode(code: string) {
 }
 
 function runCurrentScript() {
-  const code = getEditorCode();
+  let code = getEditorCode();
+  // If the bitmap editor is open, splice its in-progress state into the code
+  // so the chart/sim preview reflects the live edits without touching the doc.
+  if (state.editingBimp) {
+    const e = state.editingBimp;
+    const replacement = formatBimpExpression(
+      e.width,
+      e.height,
+      e.pixels,
+      e.palette
+    );
+    code = code.slice(0, e.exprFrom) + replacement + code.slice(e.exprTo);
+  }
   setState({ code });
   runWithCode(code);
+}
+
+let autoRunTimer: number | undefined;
+function scheduleAutoRun() {
+  if (!state.autoRun) return;
+  if (autoRunTimer !== undefined) clearTimeout(autoRunTimer);
+  autoRunTimer = window.setTimeout(() => {
+    autoRunTimer = undefined;
+    if (state.autoRun) runCurrentScript();
+  }, 250);
 }
 
 function selectExample(i: number) {
   const ex = EXAMPLES[i];
   setState({ code: ex.code, showExamplePicker: false });
   setEditorCode(ex.code);
-  runWithCode(ex.code);
+  runWithCode(ex.code, true);
 }
 
 // ─── Render loop ─────────────────────────────────────────────────────────────
@@ -294,7 +319,12 @@ const handlers: ViewHandlers = {
       },
     });
   },
-  onBimpCancel: () => setState({ editingBimp: null }),
+  onBimpCancel: () => {
+    const wasEditing = !!state.editingBimp;
+    setState({ editingBimp: null });
+    // Revert any preview by re-running with the actual (un-edited) doc.
+    if (wasEditing && state.autoRun) runCurrentScript();
+  },
   onBimpSave: () => {
     if (!state.editingBimp) return;
     const { exprFrom, exprTo, width, height, pixels, palette } =
@@ -310,6 +340,7 @@ const handlers: ViewHandlers = {
     const pixels = cur.pixels.slice();
     pixels[idx] = cur.brushValue;
     setState({ editingBimp: { ...cur, pixels } });
+    if (state.autoRun) runCurrentScript();
   },
   onBimpBrushSelect: (value: number) => {
     if (!state.editingBimp) return;
@@ -328,6 +359,7 @@ const handlers: ViewHandlers = {
       }
     }
     setState({ editingBimp: { ...cur, width: w, height: h, pixels } });
+    if (state.autoRun) runCurrentScript();
   },
   onBimpPaletteColorChange: (index: number, color: string) => {
     if (!state.editingBimp) return;
@@ -337,6 +369,7 @@ const handlers: ViewHandlers = {
     if (palette[index] === color) return;
     palette[index] = color;
     setState({ editingBimp: { ...cur, palette } });
+    if (state.autoRun) runCurrentScript();
   },
   onBimpPaletteAdd: () => {
     if (!state.editingBimp) return;
@@ -344,7 +377,15 @@ const handlers: ViewHandlers = {
     const palette = (cur.palette ?? []).slice();
     palette.push("#888888");
     setState({ editingBimp: { ...cur, palette } });
+    if (state.autoRun) runCurrentScript();
   },
+  onToggleAutoRun: () => {
+    const next = !state.autoRun;
+    setState({ autoRun: next });
+    // Turning auto-run on should sync the view with the current code.
+    if (next) runCurrentScript();
+  },
+  onDocChange: () => scheduleAutoRun(),
   onDownloadBmp: () => {
     if (!lastProgram) return;
     triggerDownload(
@@ -579,7 +620,7 @@ function init() {
     );
 
     // Auto-run the first example on load
-    runWithCode(EXAMPLES[0].code);
+    runWithCode(EXAMPLES[0].code, true);
   });
 }
 

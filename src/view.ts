@@ -31,6 +31,7 @@ export interface AppState {
   editingBimp: BimpEditState | null;
   maxStitch: number;
   totalStitches: number;
+  autoRun: boolean;
 }
 
 export interface ViewHandlers {
@@ -53,6 +54,8 @@ export interface ViewHandlers {
   onBimpResize: (width: number, height: number) => void;
   onBimpPaletteColorChange: (index: number, color: string) => void;
   onBimpPaletteAdd: () => void;
+  onToggleAutoRun: () => void;
+  onDocChange: () => void;
   onDownloadBmp: () => void;
   onDownloadJson: () => void;
 }
@@ -106,6 +109,16 @@ export function view(state: AppState, handlers: ViewHandlers) {
                   <i class="fa-solid fa-question"></i>
                 </button>
                 <button
+                  class="flex items-center gap-[0.3rem] py-[0.2rem] px-[0.5rem] text-[0.72rem] rounded-[3px] cursor-pointer [transition:background_80ms,color_80ms] ${state.autoRun
+                    ? "bg-[var(--accent)] text-white border-0 hover:brightness-110"
+                    : "bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base4)] hover:text-[color:var(--base13)]"}"
+                  title=${state.autoRun
+                    ? "Auto-run is ON \u2014 click to turn off"
+                    : "Auto-run is OFF \u2014 click to run on every edit"}
+                  @click=${handlers.onToggleAutoRun}>
+                  <i class="fa-solid fa-bolt"></i> Auto
+                </button>
+                <button
                   class="flex items-center gap-[0.4rem] bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
                   title="Run script (Ctrl/Cmd+Enter)"
                   @click=${handlers.onRun}>
@@ -125,7 +138,8 @@ export function view(state: AppState, handlers: ViewHandlers) {
                     el as HTMLElement,
                     state.code,
                     handlers.onRun,
-                    handlers.onEditBimp
+                    handlers.onEditBimp,
+                    handlers.onDocChange
                   );
               })}
               class="flex-1 w-full overflow-hidden bg-[var(--base0)]"></div>
@@ -287,7 +301,7 @@ export function view(state: AppState, handlers: ViewHandlers) {
                 class="shrink-0 flex items-center gap-3 py-[0.35rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
                 <span
                   class="text-[0.7rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] shrink-0">
-                  Stitch
+                  Step
                 </span>
                 <input
                   type="range"

@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
 import {
@@ -42,7 +42,8 @@ export function createEditor(
   parent: HTMLElement,
   initialCode: string,
   onRunScript: () => void,
-  onEditBimp: OnEditBimp
+  onEditBimp: OnEditBimp,
+  onDocChange?: () => void
 ): EditorView {
   if (editorView) {
     editorView.destroy();
@@ -65,6 +66,13 @@ export function createEditor(
         foldGutter(),
         bimpFoldService,
         bimpEditExtension(onEditBimp),
+        EditorView.updateListener.of((update) => {
+          if (!update.docChanged || !onDocChange) return;
+          const hasUserEdit = update.transactions.some(
+            (tr) => tr.annotation(Transaction.userEvent) !== undefined
+          );
+          if (hasUserEdit) onDocChange();
+        }),
         keymap.of([
           {
             key: "Mod-Enter",
@@ -115,7 +123,7 @@ export function setEditorCode(code: string): void {
   }
 }
 
-function formatBimpExpression(
+export function formatBimpExpression(
   width: number,
   height: number,
   pixels: number[],
