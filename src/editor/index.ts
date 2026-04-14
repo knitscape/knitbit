@@ -33,6 +33,7 @@ import {
   foldAllBimpPixels,
   type OnEditBimp,
 } from "./bimpWidget";
+import { colorWidgetExtension } from "./colorWidget";
 
 export type { BimpEditTarget, OnEditBimp, PaletteEntry } from "./bimpWidget";
 import type { PaletteEntry } from "./bimpWidget";
@@ -67,6 +68,7 @@ export function createEditor(
         foldGutter(),
         bimpFoldService,
         bimpEditExtension(onEditBimp),
+        colorWidgetExtension(),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || !onDocChange) return;
           const hasUserEdit = update.transactions.some(

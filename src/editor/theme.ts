@@ -82,6 +82,22 @@ export const knitbitTheme = EditorView.theme(
       fontSize: "0.66rem",
       opacity: "0.9",
     },
+    ".cm-color-mark, .cm-color-mark *": {
+      color: "var(--cm-color-fg) !important",
+      borderRadius: "2px",
+      padding: "0 2px",
+    },
+    ".cm-color-swatch": {
+      display: "inline-block",
+      width: "0.8em",
+      height: "0.8em",
+      border: "1px solid var(--base5)",
+      borderRadius: "2px",
+      cursor: "pointer",
+      verticalAlign: "middle",
+      marginRight: "0.25em",
+      boxSizing: "border-box",
+    },
   },
   { dark: true }
 );
