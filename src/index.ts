@@ -51,7 +51,7 @@ let state: AppState = {
   editingBimp: null,
   maxStitch: 0,
   totalStitches: 0,
-  autoRun: false,
+  autoRun: true,
   scriptId: { type: "example", name: EXAMPLES[0].name },
   savedScripts: loadAllScripts(),
 };

@@ -25,7 +25,7 @@ const tile = new Bimp(
 // Tile the base motif 10× in each direction.
 const chart = Bimp.fromTile(tile.width * 10, tile.height * 10, tile);
 
-// This function separates a Bimp into
+// This function separates the colors of a bimp into one per row
 function colorSeparation(src) {
   const w = src.width;
   const h = src.height;

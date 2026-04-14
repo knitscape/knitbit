@@ -29,16 +29,45 @@ const base = new Bimp(
   ],
 );
 
-const ops = new Bimp(
-  base.width,
-  base.height,
-  base.pixels.map((op) => (op == 0 ? Op.EMPTY : Op.FKNIT)),
-);
+// Separate the non-miss colors into their own machine rows. Value 0 in
+// the chart means "nothing here" (always Op.EMPTY). Any other value is
+// a yarn index: on that yarn's machine row its own cells knit while
+// other non-zero cells miss (yarn floats past).
+function colorSeparation(src) {
+  const w = src.width;
+  const h = src.height;
+  const colors = (src.palette ?? []).map((p) =>
+    typeof p === "string" ? p : p.color,
+  );
 
-const yarnFeeder = new Array(base.height).fill(1);
+  const outOps = [];
+  const outFeeder = [];
+  for (let y = 0; y < h; y++) {
+    const rowSlice = src.crop(0, y, w, 1);
+    const activeColors = rowSlice.uniqueValues().filter((c) => c !== 0);
+    for (const c of activeColors) {
+      for (let x = 0; x < w; x++) {
+        const v = rowSlice.pixel(x, 0);
+        if (v === 0) outOps.push(Op.EMPTY);
+        else if (v === c) outOps.push(Op.FKNIT);
+        else outOps.push(Op.MISS);
+      }
+      outFeeder.push(c);
+    }
+  }
+
+  return {
+    ops: new Bimp(w, outOps.length / w, outOps),
+    yarnFeeder: outFeeder,
+    // Drop palette[0] — it's the "miss/empty" placeholder, not a yarn.
+    palette: colors.slice(1),
+  };
+}
+
+const result = colorSeparation(base);
 
 return {
-  ops: ops,
-  yarnFeeder,
-  palette: ["#a8dadc"],
+  ops: result.ops,
+  yarnFeeder: result.yarnFeeder,
+  palette: result.palette,
 };
