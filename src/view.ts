@@ -2,6 +2,7 @@ import { html } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { EXAMPLES } from "./examples";
 import { createEditor } from "./editor";
+import type { LayoutMode } from "./simulation/types";
 
 export type SimState = "idle" | "relaxing" | "relaxed";
 
@@ -15,6 +16,7 @@ export interface AppState {
   topologyMs: number;
   tickMs: number;
   showHelp: boolean;
+  layoutMode: LayoutMode;
 }
 
 export interface ViewHandlers {
@@ -26,6 +28,7 @@ export interface ViewHandlers {
   onFitCamera: () => void;
   onRun: () => void;
   onToggleHelp: () => void;
+  onToggleLayoutMode: () => void;
 }
 
 export function view(state: AppState, handlers: ViewHandlers) {
@@ -95,8 +98,15 @@ export function view(state: AppState, handlers: ViewHandlers) {
             id="chart-pane"
             class="flex flex-col overflow-hidden min-h-0 bg-[var(--base1)] [border-top:1px_solid_var(--base3)] relative">
             <div
-              class="flex-1 overflow-auto p-3">
-              <canvas id="chart-canvas" class="block"></canvas>
+              id="chart-scroll"
+              class="flex-1 overflow-auto">
+              <div class="flex items-start gap-2 py-3 pr-3 w-max">
+                <div
+                  class="sticky left-0 z-[1] bg-[var(--base1)] pl-3 pr-1 shrink-0">
+                  <canvas id="chart-sidebar" class="block"></canvas>
+                </div>
+                <canvas id="chart-canvas" class="block shrink-0"></canvas>
+              </div>
             </div>
             <div class="absolute bottom-2 right-2 flex gap-[2px] z-10">
               <button
@@ -126,12 +136,20 @@ export function view(state: AppState, handlers: ViewHandlers) {
               ? html`<span>tick: ${state.tickMs.toFixed(1)}ms</span>`
               : ""}
           </div>
-          <button
-            class="absolute top-2 right-2 bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.45rem] text-[0.75rem] z-10 cursor-pointer rounded-[3px] text-[color:var(--base12)] [transition:background_80ms] hover:bg-[var(--base4)]"
-            title="Fit view"
-            @click=${handlers.onFitCamera}>
-            <i class="fa-solid fa-expand"></i>
-          </button>
+          <div class="absolute top-2 right-2 flex gap-[2px] z-10">
+            <button
+              class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.55rem] text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.04em] uppercase rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+              title="Toggle between technical (row-based) and compressed (per-needle count) layout"
+              @click=${handlers.onToggleLayoutMode}>
+              ${state.layoutMode === "technical" ? "technical" : "compressed"}
+            </button>
+            <button
+              class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.45rem] text-[0.75rem] cursor-pointer rounded-[3px] text-[color:var(--base12)] [transition:background_80ms] hover:bg-[var(--base4)]"
+              title="Fit view"
+              @click=${handlers.onFitCamera}>
+              <i class="fa-solid fa-expand"></i>
+            </button>
+          </div>
           ${state.simState === "idle"
             ? html`<button
                 class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.4rem] px-[1.2rem] text-[0.85rem] z-10 cursor-pointer border-0 rounded-[3px] hover:brightness-110"

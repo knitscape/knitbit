@@ -1,5 +1,9 @@
 import type { Bimp } from "../shared/Bimp";
 
+// ─── Layout mode ─────────────────────────────────────────────────────────────
+
+export type LayoutMode = "technical" | "compressed";
+
 // ─── New input format ────────────────────────────────────────────────────────
 
 export interface KnittingProgram {

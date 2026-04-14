@@ -1,11 +1,19 @@
 import { Op } from "../shared/opData";
-import type { KnittingProgram, TopologyNode, TopologyResult } from "./types";
+import type {
+  KnittingProgram,
+  LayoutMode,
+  TopologyNode,
+  TopologyResult,
+} from "./types";
 
 interface Loop {
   id: number;
 }
 
-export function generateTopology(program: KnittingProgram): TopologyResult {
+export function generateTopology(
+  program: KnittingProgram,
+  mode: LayoutMode = "technical"
+): TopologyResult {
   const { width, height } = program;
   const gridWidth = 2 * width;
   const gridHeight = height + 1;
@@ -128,7 +136,10 @@ export function generateTopology(program: KnittingProgram): TopologyResult {
       // while the legs anchor at the current needle.
       const prev = lastHead[bed][n];
       const legRow = prev.j;
-      const headRow = row + 1;
+      // Technical: heads at current program row (shows time evolution).
+      // Compressed: heads one unit above the last head on this needle
+      // (per-needle stitch count — held loops don't stretch).
+      const headRow = mode === "compressed" ? prev.j + 1 : row + 1;
 
       // Sub-needle positions for legs (current needle — where stitch anchors)
       const iFirst = dir === "right" ? 2 * n : 2 * n + 1;

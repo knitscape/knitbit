@@ -22,6 +22,7 @@ let state: AppState = {
   topologyMs: 0,
   tickMs: 0,
   showHelp: false,
+  layoutMode: "technical",
 };
 
 // Last successful program — kept so we can re-render on zoom/mode changes
@@ -46,13 +47,17 @@ function setState(patch: Partial<AppState>) {
 
 function renderChart() {
   if (!lastProgram) return;
-  const canvas = document.getElementById(
+  const opsCanvas = document.getElementById(
     "chart-canvas"
   ) as HTMLCanvasElement | null;
-  if (!canvas) return;
+  const sidebarCanvas = document.getElementById(
+    "chart-sidebar"
+  ) as HTMLCanvasElement | null;
+  if (!opsCanvas || !sidebarCanvas) return;
 
   drawChart(
-    canvas,
+    sidebarCanvas,
+    opsCanvas,
     lastProgram.ops,
     lastProgram.yarnFeeder,
     lastProgram.direction,
@@ -85,6 +90,7 @@ function initSimulation(resetCamera = true) {
     canvas: simCanvas,
     cellAspect: 1,
     resetCamera,
+    layoutMode: state.layoutMode,
   });
 
   simDraw = result.draw;
@@ -159,6 +165,12 @@ const handlers: ViewHandlers = {
   },
   onRun: runCurrentScript,
   onToggleHelp: () => setState({ showHelp: !state.showHelp }),
+  onToggleLayoutMode: () => {
+    setState({
+      layoutMode: state.layoutMode === "technical" ? "compressed" : "technical",
+    });
+    initSimulation(false);
+  },
 };
 
 function loop() {

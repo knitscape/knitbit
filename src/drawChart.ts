@@ -5,7 +5,8 @@ const DIM = "#0000002a";
 const GUTTER = 0.15; // fraction of cell width between sections
 
 export function drawChart(
-  canvas: HTMLCanvasElement,
+  sidebarCanvas: HTMLCanvasElement,
+  opsCanvas: HTMLCanvasElement,
   ops: Bimp,
   yarnFeeder: number[],
   direction: ("left" | "right")[],
@@ -15,92 +16,91 @@ export function drawChart(
 ) {
   const { width, height } = ops;
 
-  // Layout: [direction col] [gutter] [ops grid] [gutter] [yarn col] [gutter] [racking col]
   const gutterPx = Math.round(cellSize * GUTTER);
   const colWidth = cellSize;
-  const totalWidth =
-    colWidth + gutterPx + width * cellSize + gutterPx + colWidth + gutterPx + colWidth;
+  // Sidebar layout (left → right): [racking] [gutter] [yarn] [gutter] [direction]
+  const sidebarWidth = colWidth * 3 + gutterPx * 2;
+  const opsWidth = width * cellSize;
   const totalHeight = height * cellSize;
 
-  canvas.width = totalWidth;
-  canvas.height = totalHeight;
+  sidebarCanvas.width = sidebarWidth;
+  sidebarCanvas.height = totalHeight;
+  opsCanvas.width = opsWidth;
+  opsCanvas.height = totalHeight;
 
-  const ctx = canvas.getContext("2d")!;
-  ctx.clearRect(0, 0, totalWidth, totalHeight);
+  const sCtx = sidebarCanvas.getContext("2d")!;
+  const oCtx = opsCanvas.getContext("2d")!;
+  sCtx.clearRect(0, 0, sidebarWidth, totalHeight);
+  oCtx.clearRect(0, 0, opsWidth, totalHeight);
 
-  // Resolve CSS custom properties for canvas use
   const styles = getComputedStyle(document.documentElement);
   const colBg = styles.getPropertyValue("--base2").trim() || "#2a2a2a";
   const colFg = styles.getPropertyValue("--base10").trim() || "#ccc";
 
-  const dirX = 0;
-  const opsX = colWidth + gutterPx;
-  const yarnX = opsX + width * cellSize + gutterPx;
-  const rackX = yarnX + colWidth + gutterPx;
+  const rackX = 0;
+  const yarnX = colWidth + gutterPx;
+  const dirX = yarnX + colWidth + gutterPx;
 
   for (let y = 0; y < height; y++) {
     const canvasY = (height - y - 1) * cellSize;
 
+    // ── Racking column ────────────────────────────────────────────────
+    const rack = racking[y] ?? 0;
+    sCtx.save();
+    sCtx.translate(rackX, canvasY);
+    sCtx.fillStyle = colBg;
+    sCtx.fillRect(0, 0, colWidth, cellSize);
+    sCtx.fillStyle = colFg;
+    sCtx.font = `${Math.round(cellSize * 0.45)}px monospace`;
+    sCtx.textAlign = "center";
+    sCtx.textBaseline = "middle";
+    sCtx.fillText(String(rack), colWidth / 2, cellSize / 2);
+    sCtx.restore();
+
+    // ── Yarn column ───────────────────────────────────────────────────
+    const yarnIndex = yarnFeeder[y] ?? 0;
+    sCtx.save();
+    sCtx.translate(yarnX, canvasY);
+    sCtx.fillStyle =
+      yarnIndex === 0 ? "#555555" : (palette[yarnIndex - 1] ?? "#555555");
+    sCtx.fillRect(0, 0, colWidth, cellSize);
+    sCtx.restore();
+
     // ── Direction column ──────────────────────────────────────────────
-    ctx.save();
-    ctx.translate(dirX, canvasY);
-    ctx.fillStyle = colBg;
-    ctx.fillRect(0, 0, colWidth, cellSize);
-    ctx.fillStyle = colFg;
-    ctx.font = `${Math.round(cellSize * 0.5)}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    sCtx.save();
+    sCtx.translate(dirX, canvasY);
+    sCtx.fillStyle = colBg;
+    sCtx.fillRect(0, 0, colWidth, cellSize);
+    sCtx.fillStyle = colFg;
+    sCtx.font = `${Math.round(cellSize * 0.5)}px sans-serif`;
+    sCtx.textAlign = "center";
+    sCtx.textBaseline = "middle";
     const dir = direction[y] ?? "right";
     const arrow = dir === "right" ? "\u2192" : "\u2190";
-    ctx.fillText(arrow, colWidth / 2, cellSize / 2);
-    ctx.restore();
+    sCtx.fillText(arrow, colWidth / 2, cellSize / 2);
+    sCtx.restore();
 
     // ── Operations grid ───────────────────────────────────────────────
     for (let x = 0; x < width; x++) {
       const opIndex = ops.pixel(x, y);
       const symbolData = SYMBOL_DATA[opIndex];
 
-      ctx.save();
-      ctx.translate(opsX + x * cellSize, canvasY);
-      ctx.scale(cellSize, cellSize);
+      oCtx.save();
+      oCtx.translate(x * cellSize, canvasY);
+      oCtx.scale(cellSize, cellSize);
 
-      ctx.fillStyle = symbolData?.color ?? "#555555";
-      ctx.fillRect(0, 0, 1, 1);
+      oCtx.fillStyle = symbolData?.color ?? "#555555";
+      oCtx.fillRect(0, 0, 1, 1);
 
       if (BACK_OPS.has(opIndex)) {
-        ctx.fillStyle = DIM;
-        ctx.fillRect(0, 0, 1, 1);
+        oCtx.fillStyle = DIM;
+        oCtx.fillRect(0, 0, 1, 1);
       }
 
-      ctx.lineWidth = 0.03;
-      if (symbolData?.path) ctx.stroke(symbolData.path);
+      oCtx.lineWidth = 0.03;
+      if (symbolData?.path) oCtx.stroke(symbolData.path);
 
-      ctx.restore();
+      oCtx.restore();
     }
-
-    // ── Yarn column ───────────────────────────────────────────────────
-    const yarnIndex = yarnFeeder[y] ?? 0;
-    ctx.save();
-    ctx.translate(yarnX, canvasY);
-    if (yarnIndex === 0) {
-      ctx.fillStyle = "#555555";
-    } else {
-      ctx.fillStyle = palette[yarnIndex - 1] ?? "#555555";
-    }
-    ctx.fillRect(0, 0, colWidth, cellSize);
-    ctx.restore();
-
-    // ── Racking column ────────────────────────────────────────────────
-    const rack = racking[y] ?? 0;
-    ctx.save();
-    ctx.translate(rackX, canvasY);
-    ctx.fillStyle = colBg;
-    ctx.fillRect(0, 0, colWidth, cellSize);
-    ctx.fillStyle = colFg;
-    ctx.font = `${Math.round(cellSize * 0.45)}px monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(String(rack), colWidth / 2, cellSize / 2);
-    ctx.restore();
   }
 }

@@ -6,7 +6,7 @@ import {
   layoutNodes,
 } from "./layout";
 import { generateTopology } from "./topology";
-import type { KnittingProgram } from "./types";
+import type { KnittingProgram, LayoutMode } from "./types";
 
 import { noodleRenderer } from "./renderer";
 
@@ -20,6 +20,7 @@ export interface SimulateOptions {
   canvas: HTMLCanvasElement;
   cellAspect: number;
   resetCamera?: boolean;
+  layoutMode?: LayoutMode;
 }
 
 export function simulate(program: KnittingProgram, options: SimulateOptions) {
@@ -38,7 +39,7 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
 
   const t0 = performance.now();
 
-  const topology = generateTopology(program);
+  const topology = generateTopology(program, options.layoutMode ?? "technical");
   const { nodes, nodeMap } = layoutNodes(topology, program, params);
   const segments = computeYarnPathSpline(
     topology,
