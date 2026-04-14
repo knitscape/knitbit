@@ -118,7 +118,7 @@ function stitchToRowCol(
     for (let i = 0; i < w; i++) {
       const col = dir === "right" ? i : w - 1 - i;
       const op = program.ops.pixel(col, row);
-      if (op === Op.MISS) continue;
+      if (op === Op.MISS || op === Op.EMPTY) continue;
       count++;
       if (count === n) return { row, col };
     }
@@ -138,7 +138,7 @@ function rowColToStitch(
     for (let i = 0; i < w; i++) {
       const col = dir === "right" ? i : w - 1 - i;
       const op = program.ops.pixel(col, row);
-      if (op !== Op.MISS) count++;
+      if (op !== Op.MISS && op !== Op.EMPTY) count++;
       if (row === targetRow && col === targetCol) return count;
     }
   }
@@ -811,7 +811,7 @@ function init() {
         if (which === "racking") {
           label += `, racking ${lastProgram.racking[row] ?? 0}`;
         } else if (which === "yarn") {
-          label += `, yarn ${lastProgram.yarnFeeder[row] ?? 0}`;
+          label += `, yarn ${lastProgram.yarnFeeder[row] ?? "none"}`;
         } else if (which === "direction") {
           label += `, direction ${lastProgram.direction[row] ?? "right"}`;
         }

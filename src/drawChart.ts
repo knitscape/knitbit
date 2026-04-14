@@ -73,7 +73,7 @@ export function drawChart(
   sidebarCanvas: HTMLCanvasElement,
   opsCanvas: HTMLCanvasElement,
   ops: Bimp,
-  yarnFeeder: number[],
+  yarnFeeder: (number | null)[],
   direction: ("left" | "right")[],
   racking: number[],
   palette: string[],
@@ -133,11 +133,13 @@ export function drawChart(
     sCtx.restore();
 
     // ── Yarn column ───────────────────────────────────────────────────
-    const yarnIndex = yarnFeeder[y] ?? 0;
+    const yarnIndex = yarnFeeder[y];
     sCtx.save();
     sCtx.translate(yarnX, canvasY);
     sCtx.fillStyle =
-      yarnIndex === 0 ? "#555555" : (palette[yarnIndex - 1] ?? "#555555");
+      yarnIndex == null || yarnIndex === 0
+        ? "#555555"
+        : (palette[yarnIndex - 1] ?? "#555555");
     sCtx.fillRect(0, 0, YARN_WIDTH, cellSize);
     sCtx.restore();
 

@@ -861,6 +861,9 @@ function helpModal(handlers: ViewHandlers) {
                   ["Op.BTUCK", "4", "Back bed tuck"],
                   ["Op.FTB", "5", "Transfer front \u2192 back"],
                   ["Op.BTF", "6", "Transfer back \u2192 front"],
+                  ["Op.FDROP", "7", "Drop loop from front bed"],
+                  ["Op.BDROP", "8", "Drop loop from back bed"],
+                  ["Op.EMPTY", "9", "No action (use for non-transfer cells in a transfer row)"],
                 ].map(
                   ([name, val, desc]) => html`<tr>
                     <td
@@ -896,8 +899,8 @@ function helpModal(handlers: ViewHandlers) {
                   ],
                   [
                     "yarnFeeder",
-                    "number[]",
-                    "Feeder id per row (length = height).",
+                    "(number | null)[]",
+                    "Feeder id per row. Use null for a transfer-only row (no yarn).",
                   ],
                   [
                     "direction",

@@ -10,7 +10,7 @@ export interface KnittingProgram {
   width: number; // number of needles
   height: number; // number of rows
   ops: Bimp; // width × height bitmap of Op values
-  yarnFeeder: number[]; // per-row yarn index (1-based)
+  yarnFeeder: (number | null)[]; // per-row yarn index (1-based); null = transfer-only row (no yarn)
   direction: ("left" | "right")[]; // per-row carriage direction
   racking: number[]; // per-row bed offset
   palette: string[]; // yarn colors (indexed by yarnFeeder - 1)

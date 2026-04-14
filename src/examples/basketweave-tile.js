@@ -33,7 +33,7 @@ function bedTransfers(ops, yarnFeeder, direction) {
 
   for (let row = 0; row < h; row++) {
     if (row > 0) {
-      const transferRow = new Array(w).fill(Op.MISS);
+      const transferRow = new Array(w).fill(Op.EMPTY);
       let needsTransfer = false;
       for (let col = 0; col < w; col++) {
         const cur = ops.pixel(col, row);
@@ -48,7 +48,8 @@ function bedTransfers(ops, yarnFeeder, direction) {
       }
       if (needsTransfer) {
         outOps.push(...transferRow);
-        outFeeder.push(yarnFeeder[row]);
+        // null yarn marks a transfer-only row (no yarn is being fed).
+        outFeeder.push(null);
         outDirection.push(direction[row]);
         outRacking.push(0);
       }

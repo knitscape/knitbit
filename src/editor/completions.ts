@@ -11,6 +11,9 @@ const OP_MEMBERS = [
   { label: "Op.BTUCK", type: "enum", detail: "= 4", info: "Back bed tuck" },
   { label: "Op.FTB", type: "enum", detail: "= 5", info: "Transfer front to back" },
   { label: "Op.BTF", type: "enum", detail: "= 6", info: "Transfer back to front" },
+  { label: "Op.FDROP", type: "enum", detail: "= 7", info: "Drop loop from front bed" },
+  { label: "Op.BDROP", type: "enum", detail: "= 8", info: "Drop loop from back bed" },
+  { label: "Op.EMPTY", type: "enum", detail: "= 9", info: "No action at this cell" },
 ];
 
 const BIMP_STATIC_METHODS = [

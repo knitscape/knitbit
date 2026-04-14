@@ -1,11 +1,15 @@
 # Dev plan
 
-# program
+## topology
+
+- pointelle holes are creating leg nodes when they shouldn't
+
+## program
 
 - need explicit miss and non-explicit miss
 - need "empty" yarn to signify transfer rows
 
-# simulation/rendering
+## simulation/rendering
 
 - figure out whatever is going on with the renderer
 - proper CN stacking
@@ -22,12 +26,11 @@
 - fix the color picker styles. the little icon to open the color picker is all
   messed up
 
-- download the bitmap from the bitmap widget
-
 - later:
   - upload your own bitmap to the bitmap widget
+  - download the bitmap from the bitmap widget
 
-# examples
+## examples
 
 - something that shows off the racking
 - draw colorwork and do color separation
