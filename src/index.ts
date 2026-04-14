@@ -5,6 +5,7 @@ import { drawChart } from "./drawChart";
 import { simulate } from "./simulation/simulate";
 import { runScript } from "./execute";
 import { view, type AppState, type ViewHandlers } from "./view";
+import { getEditorCode, setEditorCode } from "./editor";
 import { EXAMPLES } from "./examples";
 import type { KnittingProgram } from "./simulation/types";
 
@@ -20,6 +21,7 @@ let state: AppState = {
   simState: "idle",
   topologyMs: 0,
   tickMs: 0,
+  showHelp: false,
 };
 
 // Last successful program — kept so we can re-render on zoom/mode changes
@@ -124,10 +126,7 @@ function runWithCode(code: string) {
 }
 
 function runCurrentScript() {
-  const editor = document.getElementById(
-    "code-editor"
-  ) as HTMLTextAreaElement | null;
-  const code = editor ? editor.value : state.code;
+  const code = getEditorCode();
   setState({ code, activeExample: -1 });
   runWithCode(code);
 }
@@ -135,6 +134,7 @@ function runCurrentScript() {
 function selectExample(i: number) {
   const ex = EXAMPLES[i];
   setState({ code: ex.code, activeExample: i });
+  setEditorCode(ex.code);
   runWithCode(ex.code);
 }
 
@@ -157,6 +157,8 @@ const handlers: ViewHandlers = {
   onFitCamera: () => {
     if (simFitCamera) simFitCamera();
   },
+  onRun: runCurrentScript,
+  onToggleHelp: () => setState({ showHelp: !state.showHelp }),
 };
 
 function loop() {
@@ -199,32 +201,13 @@ function init() {
       direction: "vertical",
     });
 
-    // Ctrl/Cmd+Enter to run
+    // Escape closes the help modal
     document.addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      if (e.key === "Escape" && state.showHelp) {
         e.preventDefault();
-        runCurrentScript();
+        setState({ showHelp: false });
       }
     });
-
-    // Tab inserts spaces in the editor
-    const editor = document.getElementById(
-      "code-editor"
-    ) as HTMLTextAreaElement | null;
-    if (editor) {
-      editor.addEventListener("keydown", (e) => {
-        if (e.key === "Tab") {
-          e.preventDefault();
-          const start = editor.selectionStart;
-          const end = editor.selectionEnd;
-          editor.value =
-            editor.value.substring(0, start) +
-            "  " +
-            editor.value.substring(end);
-          editor.selectionStart = editor.selectionEnd = start + 2;
-        }
-      });
-    }
 
     // Ctrl+scroll to zoom on the chart pane
     const chartPane = document.getElementById("chart-pane");

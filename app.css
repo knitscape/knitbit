@@ -48,10 +48,10 @@
   border-radius: 2px;
 }
 
-/* ─── Code editor selection ─────────────────────────────────────────────── */
+/* ─── CodeMirror fill container ────────────────────────────────────────── */
 
-#code-editor::selection {
-  background: rgba(255, 255, 255, 0.15);
+#code-editor .cm-editor {
+  height: 100%;
 }
 
 /* ─── Split gutter (created by split.js) ────────────────────────────────── */
