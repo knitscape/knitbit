@@ -18,7 +18,7 @@ for (let row = 0; row < h; row++) {
 }
 
 return {
-  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  ops: new Bimp(w, h, ops),
   yarnFeeder,
   direction,
   palette: ["#264653", "#e9c46a"],

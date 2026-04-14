@@ -118,6 +118,10 @@ export function view(state: AppState, handlers: ViewHandlers) {
           <div id="code-pane" class="flex flex-col overflow-hidden min-h-0 relative">
             <div
               class="shrink-0 flex items-center justify-between gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-bottom:1px_solid_var(--base3)]">
+              <span
+                class="text-[0.82rem] [font-variation-settings:'wght'_700] tracking-[0.04em] text-[color:var(--accent)] shrink-0 mr-1 select-none">
+                knitbit
+              </span>
               ${state.scriptId.type === "saved"
                 ? html`<input
                     type="text"
@@ -859,14 +863,15 @@ function helpModal(handlers: ViewHandlers) {
               <tbody>
                 ${[
                   ["\u2318 / Ctrl + Enter", "Run script"],
-                  ["\u2318 / Ctrl + S", "Download script as .js"],
+                  ["\u2318 / Ctrl + S", "Download current script as .js"],
                   ["Tab", "Indent (2 spaces)"],
                   ["Shift + Tab", "Outdent"],
                   ["\u2318 / Ctrl + Z", "Undo"],
                   ["\u2318 / Ctrl + Shift + Z", "Redo"],
                   ["\u2318 / Ctrl + F", "Find"],
                   ["\u2318 / Ctrl + Space", "Trigger autocomplete"],
-                  ["Esc", "Close this dialog"],
+                  ["\u2318 / Ctrl + wheel", "Zoom chart or bitmap editor"],
+                  ["Esc", "Close any open modal"],
                 ].map(
                   ([k, v]) => html`<tr>
                     <td
@@ -878,6 +883,99 @@ function helpModal(handlers: ViewHandlers) {
                 )}
               </tbody>
             </table>
+          </section>
+
+          <section>
+            <h3
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mb-2">
+              Script workspace
+            </h3>
+            <ul
+              class="list-disc pl-5 text-[color:var(--base10)] space-y-[0.3rem]">
+              <li>
+                The script pane auto-saves to browser storage as you type.
+                When you edit a read-only example, it forks into an
+                <code class="font-mono">Untitled</code> saved script.
+              </li>
+              <li>
+                <b>Load</b> opens saved scripts (with delete);
+                <b>Load Example</b> opens the bundled examples.
+              </li>
+              <li>
+                Click the script name in the toolbar to rename. Names must
+                be unique.
+              </li>
+              <li>
+                The <i class="fa-solid fa-bolt"></i> <b>Auto</b> toggle runs
+                the script live on every edit (typing, bitmap paints,
+                resizes, palette changes). Run is disabled while Auto is
+                on; Ctrl/Cmd+Enter still works as a manual kick.
+              </li>
+              <li>
+                The last-opened script is restored on page refresh.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mb-2">
+              Chart pane
+            </h3>
+            <ul
+              class="list-disc pl-5 text-[color:var(--base10)] space-y-[0.3rem]">
+              <li><b>Drag</b> anywhere to pan the chart and sidebar.</li>
+              <li>
+                <b>Click a cell</b> to set the step scrubber to that
+                stitch — the 3D preview jumps to that point.
+              </li>
+              <li>
+                <b>Ctrl/Cmd + scroll</b> to zoom cells in and out.
+              </li>
+              <li>
+                The Step slider scrubs through the program one op at a
+                time (skipping MISS / EMPTY).
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mb-2">
+              Bitmap editor
+            </h3>
+            <p class="mb-2 text-[color:var(--base10)]">
+              Inline bitmap literals
+              (<code class="font-mono">new Bimp(w, h, […], […])</code>) get
+              an accent-colored <b>✎</b> edit badge in the gutter. Click
+              it to paint the bitmap visually.
+            </p>
+            <ul
+              class="list-disc pl-5 text-[color:var(--base10)] space-y-[0.3rem]">
+              <li>
+                <b>Tools</b>: brush (paint, drag to paint continuously),
+                line and rectangle (click-drag), flood fill.
+              </li>
+              <li>
+                <b>Shift</b> arrows move the whole bitmap one cell with
+                wraparound.
+              </li>
+              <li>
+                Resize via the W × H inputs. Zoom with the +/− buttons or
+                Ctrl/Cmd + scroll on the grid.
+              </li>
+              <li>
+                Palette swatches pick the brush value; the small pencil
+                badge opens the native color picker; the text field
+                next to each swatch edits its label. Click
+                <b>+</b> to add a new palette color.
+              </li>
+              <li>
+                Save commits changes to source (the whole
+                <code class="font-mono">new Bimp(...)</code> call is
+                rewritten). Cancel or Esc discards.
+              </li>
+            </ul>
           </section>
 
           <section>

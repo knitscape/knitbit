@@ -19,7 +19,12 @@ const base = new Bimp(
     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
     3, 3, 3, 3, 3, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
   ],
-  ["#000000", "#08ccab", "#eb4034", "#20079d"],
+  [
+    { color: "#000000", label: "miss" },
+    { color: "#08ccab", label: "yarn 1" },
+    { color: "#eb4034", label: "yarn 2" },
+    { color: "#20079d", label: "yarn 3" },
+  ],
 );
 
 const ops = new Bimp(

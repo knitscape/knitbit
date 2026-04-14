@@ -76,7 +76,7 @@ function bedTransfers(ops, yarnFeeder, direction) {
   }
 
   return {
-    ops: new Bimp(w, outOps.length / w, new Uint8ClampedArray(outOps)),
+    ops: new Bimp(w, outOps.length / w, outOps),
     yarnFeeder: outFeeder,
     direction: outDirection,
     racking: outRacking,
