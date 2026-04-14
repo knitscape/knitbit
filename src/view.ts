@@ -5,6 +5,11 @@ import { createEditor, type BimpEditTarget } from "./editor";
 import type { LayoutMode } from "./simulation/types";
 import { SYMBOL_DATA } from "./shared/opData";
 import { Bimp } from "./shared/Bimp";
+import type { SavedScript } from "./scripts";
+
+export type ScriptId =
+  | { type: "saved"; name: string }
+  | { type: "example"; name: string };
 
 export type SimState = "idle" | "relaxing" | "relaxed";
 
@@ -38,6 +43,9 @@ export interface AppState {
   maxStitch: number;
   totalStitches: number;
   autoRun: boolean;
+  scriptId: ScriptId;
+  showScriptPicker: boolean;
+  savedScripts: Record<string, SavedScript>;
 }
 
 export interface ViewHandlers {
@@ -45,6 +53,10 @@ export interface ViewHandlers {
   onZoomOut: () => void;
   onSelectExample: (i: number) => void;
   onToggleExamplePicker: () => void;
+  onToggleScriptPicker: () => void;
+  onLoadScript: (name: string) => void;
+  onDeleteScript: (name: string) => void;
+  onRenameCurrentScript: (newName: string) => void;
   onRelax: () => void;
   onReset: () => void;
   onFitCamera: () => void;
@@ -68,6 +80,7 @@ export interface ViewHandlers {
   onDocChange: () => void;
   onDownloadBmp: () => void;
   onDownloadJson: () => void;
+  onDownloadScript: () => void;
 }
 
 const FALLBACK_COLORS: string[] = [
@@ -101,16 +114,38 @@ export function view(state: AppState, handlers: ViewHandlers) {
           <div id="code-pane" class="flex flex-col overflow-hidden min-h-0 relative">
             <div
               class="shrink-0 flex items-center justify-between gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-bottom:1px_solid_var(--base3)]">
-              <span
-                class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
-                Script
-              </span>
+              ${state.scriptId.type === "saved"
+                ? html`<input
+                    type="text"
+                    .value=${state.scriptId.name}
+                    @change=${(e: Event) =>
+                      handlers.onRenameCurrentScript(
+                        (e.target as HTMLInputElement).value
+                      )}
+                    @keydown=${(e: KeyboardEvent) => {
+                      if (e.key === "Enter")
+                        (e.target as HTMLInputElement).blur();
+                    }}
+                    spellcheck="false"
+                    class="min-w-0 w-[14rem] bg-transparent border border-transparent hover:border-[color:var(--base4)] focus:border-[color:var(--base5)] focus:bg-[var(--base2)] focus:outline-none rounded-[3px] py-[0.1rem] px-[0.35rem] text-[0.82rem] [font-variation-settings:'wght'_600] text-[color:var(--base13)]" />`
+                : html`<span
+                    class="text-[0.78rem] text-[color:var(--base7)] italic truncate"
+                    title=${state.scriptId.name + " (example)"}>
+                    ${state.scriptId.name}
+                    <span class="text-[0.68rem] opacity-70">(example)</span>
+                  </span>`}
               <div class="flex items-center gap-[0.3rem]">
+                <button
+                  class="flex items-center gap-[0.35rem] bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.5rem] text-[0.72rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                  title="Load a saved script"
+                  @click=${handlers.onToggleScriptPicker}>
+                  <i class="fa-solid fa-folder-open"></i> Load
+                </button>
                 <button
                   class="flex items-center gap-[0.35rem] bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.5rem] text-[0.72rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
                   title="Load an example"
                   @click=${handlers.onToggleExamplePicker}>
-                  <i class="fa-solid fa-folder-open"></i> Load
+                  <i class="fa-solid fa-book-open"></i> Load Example
                 </button>
                 <button
                   class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
@@ -129,8 +164,19 @@ export function view(state: AppState, handlers: ViewHandlers) {
                   <i class="fa-solid fa-bolt"></i> Auto
                 </button>
                 <button
-                  class="flex items-center gap-[0.4rem] bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
-                  title="Run script (Ctrl/Cmd+Enter)"
+                  class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                  title="Download this script as a .js file"
+                  @click=${handlers.onDownloadScript}>
+                  <i class="fa-solid fa-download"></i>
+                </button>
+                <button
+                  ?disabled=${state.autoRun}
+                  class="flex items-center gap-[0.4rem] [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 [transition:filter_80ms] ${state.autoRun
+                    ? "bg-[var(--base3)] text-[color:var(--base7)] cursor-not-allowed"
+                    : "bg-[var(--accent)] text-white cursor-pointer hover:brightness-110"}"
+                  title=${state.autoRun
+                    ? "Auto-run is on \u2014 the script runs automatically"
+                    : "Run script (Ctrl/Cmd+Enter)"}
                   @click=${handlers.onRun}>
                   <i class="fa-solid fa-play"></i> Run
                   <span
@@ -338,6 +384,67 @@ export function view(state: AppState, handlers: ViewHandlers) {
 
     ${state.showHelp ? helpModal(handlers) : ""}
     ${state.showExamplePicker ? examplePickerModal(handlers) : ""}
+    ${state.showScriptPicker ? scriptPickerModal(state, handlers) : ""}
+  `;
+}
+
+function scriptPickerModal(state: AppState, handlers: ViewHandlers) {
+  const entries = Object.entries(state.savedScripts).sort(
+    ([, a], [, b]) => b.updatedAt - a.updatedAt
+  );
+  return html`
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      @click=${(e: MouseEvent) => {
+        if (e.target === e.currentTarget) handlers.onToggleScriptPicker();
+      }}>
+      <div
+        class="bg-[var(--base1)] border border-[color:var(--base3)] rounded-[4px] shadow-xl w-[min(420px,100%)] max-h-[80vh] flex flex-col overflow-hidden">
+        <div
+          class="flex items-center justify-between gap-3 py-[0.5rem] px-4 [border-bottom:1px_solid_var(--base3)] shrink-0">
+          <span
+            class="text-[0.78rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base10)]">
+            Load script
+          </span>
+          <button
+            class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+            title="Close"
+            @click=${handlers.onToggleScriptPicker}>
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="overflow-y-auto flex-1 py-[0.3rem]">
+          ${entries.length === 0
+            ? html`<div
+                class="py-6 px-4 text-center text-[0.82rem] text-[color:var(--base7)] italic">
+                No saved scripts yet.
+              </div>`
+            : entries.map(
+                ([name, entry]) => html`<div
+                  class="flex items-center gap-2 py-[0.25rem] pl-4 pr-2 [transition:background_80ms] hover:bg-[var(--base2)]">
+                  <button
+                    class="flex-1 min-w-0 text-left py-[0.3rem] bg-transparent border-0 text-[color:var(--base12)] cursor-pointer hover:text-[color:var(--base13)]"
+                    @click=${() => handlers.onLoadScript(name)}>
+                    <div class="text-[0.82rem] truncate">${name}</div>
+                    <div
+                      class="text-[0.68rem] text-[color:var(--base7)] tabular-nums">
+                      ${new Date(entry.updatedAt).toLocaleString()}
+                    </div>
+                  </button>
+                  <button
+                    class="flex items-center justify-center w-[1.6rem] h-[1.6rem] bg-transparent border-0 text-[0.75rem] rounded-[3px] text-[color:var(--base7)] cursor-pointer [transition:background_80ms,color_80ms] hover:bg-[var(--base3)] hover:text-red-400 shrink-0"
+                    title="Delete ${name}"
+                    @click=${(e: MouseEvent) => {
+                      e.stopPropagation();
+                      handlers.onDeleteScript(name);
+                    }}>
+                    <i class="fa-solid fa-trash"></i>
+                  </button>
+                </div>`
+              )}
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -534,7 +641,7 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
             })}
             @pointerdown=${(e: PointerEvent) => {
               e.preventDefault();
-              const [cx, cy] = canvasToCell(e, cellSizePx);
+              const [cx, cy] = canvasToCell(e, cellSizePx, height);
               (e.currentTarget as HTMLCanvasElement).setPointerCapture(
                 e.pointerId
               );
@@ -542,7 +649,7 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
             }}
             @pointermove=${(e: PointerEvent) => {
               if (!edit.dragFrom) return;
-              const [cx, cy] = canvasToCell(e, cellSizePx);
+              const [cx, cy] = canvasToCell(e, cellSizePx, height);
               handlers.onBimpPointerMove(cx, cy);
             }}
             @pointerup=${(e: PointerEvent) => {
@@ -572,13 +679,19 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
   `;
 }
 
-function canvasToCell(e: PointerEvent, cellSize: number): [number, number] {
+function canvasToCell(
+  e: PointerEvent,
+  cellSize: number,
+  height: number
+): [number, number] {
   const canvas = e.currentTarget as HTMLCanvasElement;
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.clientWidth / rect.width;
   const scaleY = canvas.clientHeight / rect.height;
   const x = Math.floor(((e.clientX - rect.left) * scaleX) / cellSize);
-  const y = Math.floor(((e.clientY - rect.top) * scaleY) / cellSize);
+  const yFromTop = Math.floor(((e.clientY - rect.top) * scaleY) / cellSize);
+  // Flip so row 0 is at the bottom, matching how the knit chart reads.
+  const y = height - 1 - yFromTop;
   return [x, y];
 }
 
@@ -617,10 +730,11 @@ function drawBimpCanvas(
   ctx.imageSmoothingEnabled = false;
 
   for (let y = 0; y < height; y++) {
+    const screenY = height - 1 - y;
     for (let x = 0; x < width; x++) {
       const v = pixels[y * width + x];
       ctx.fillStyle = colorFor(v, palette);
-      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+      ctx.fillRect(x * cellSize, screenY * cellSize, cellSize, cellSize);
     }
   }
 
@@ -644,13 +758,14 @@ function drawBimpCanvas(
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let y = 0; y < height; y++) {
+      const screenY = height - 1 - y;
       for (let x = 0; x < width; x++) {
         const v = pixels[y * width + x];
         ctx.fillStyle = pickTextColor(colorFor(v, palette));
         ctx.fillText(
           String(v),
           x * cellSize + cellSize / 2,
-          y * cellSize + cellSize / 2
+          screenY * cellSize + cellSize / 2
         );
       }
     }
@@ -704,6 +819,7 @@ function helpModal(handlers: ViewHandlers) {
               <tbody>
                 ${[
                   ["\u2318 / Ctrl + Enter", "Run script"],
+                  ["\u2318 / Ctrl + S", "Download script as .js"],
                   ["Tab", "Indent (2 spaces)"],
                   ["Shift + Tab", "Outdent"],
                   ["\u2318 / Ctrl + Z", "Undo"],

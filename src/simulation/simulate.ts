@@ -14,7 +14,7 @@ let renderer = noodleRenderer;
 
 const YARN_DIAMETER = 0.27;
 const STITCH_WIDTH = 1;
-const BED_OFFSET = 0.1;
+const BED_OFFSET = 0.25;
 
 export interface SimulateOptions {
   canvas: HTMLCanvasElement;

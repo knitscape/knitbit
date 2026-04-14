@@ -14,6 +14,16 @@ import { runScript } from "./execute";
 import { Bimp } from "./shared/Bimp";
 import { view, type AppState, type ViewHandlers, type BimpTool } from "./view";
 import {
+  loadAllScripts,
+  getScript,
+  saveScript,
+  deleteScript,
+  renameScript,
+  loadLastOpened,
+  saveLastOpened,
+  nextUntitledName,
+} from "./scripts";
+import {
   getEditorCode,
   setEditorCode,
   replaceBimpExpression,
@@ -32,6 +42,7 @@ let state: AppState = {
   statusText: "Press Run or Ctrl+Enter to generate the chart.",
   statusClass: "text-[color:var(--base7)]",
   showExamplePicker: false,
+  showScriptPicker: false,
   simState: "idle",
   topologyMs: 0,
   tickMs: 0,
@@ -41,6 +52,8 @@ let state: AppState = {
   maxStitch: 0,
   totalStitches: 0,
   autoRun: false,
+  scriptId: { type: "example", name: EXAMPLES[0].name },
+  savedScripts: loadAllScripts(),
 };
 
 // Last successful program — kept so we can re-render on zoom/mode changes
@@ -263,11 +276,65 @@ function scheduleAutoRun() {
   }, 250);
 }
 
+let autoSaveTimer: number | undefined;
+function scheduleAutoSave() {
+  if (autoSaveTimer !== undefined) clearTimeout(autoSaveTimer);
+  autoSaveTimer = window.setTimeout(() => {
+    autoSaveTimer = undefined;
+    persistCurrentScript();
+  }, 500);
+}
+
+function persistCurrentScript() {
+  const code = getEditorCode();
+  let name: string;
+  if (state.scriptId.type === "example") {
+    // Fork the example: create an Untitled saved script.
+    name = nextUntitledName(state.savedScripts);
+    setState({ scriptId: { type: "saved", name } });
+  } else {
+    name = state.scriptId.name;
+  }
+  saveScript(name, code);
+  saveLastOpened({ type: "saved", name });
+  setState({ savedScripts: loadAllScripts() });
+}
+
 function selectExample(i: number) {
+  // Any pending auto-save for the outgoing script should flush first so
+  // users don't lose the last few keystrokes when switching away.
+  if (autoSaveTimer !== undefined) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = undefined;
+    persistCurrentScript();
+  }
   const ex = EXAMPLES[i];
-  setState({ code: ex.code, showExamplePicker: false });
+  setState({
+    code: ex.code,
+    showExamplePicker: false,
+    scriptId: { type: "example", name: ex.name },
+  });
   setEditorCode(ex.code);
+  saveLastOpened({ type: "example", name: ex.name });
   runWithCode(ex.code, true);
+}
+
+function loadSavedScript(name: string) {
+  if (autoSaveTimer !== undefined) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = undefined;
+    persistCurrentScript();
+  }
+  const script = getScript(name);
+  if (!script) return;
+  setState({
+    code: script.code,
+    showScriptPicker: false,
+    scriptId: { type: "saved", name },
+  });
+  setEditorCode(script.code);
+  saveLastOpened({ type: "saved", name });
+  runWithCode(script.code, true);
 }
 
 // ─── Render loop ─────────────────────────────────────────────────────────────
@@ -336,6 +403,9 @@ const handlers: ViewHandlers = {
     replaceBimpExpression(exprFrom, exprTo, width, height, pixels, palette);
     setState({ editingBimp: null });
     runCurrentScript();
+    // replaceBimpExpression is a programmatic dispatch, so onDocChange
+    // won't fire — persist explicitly so the committed bitmap is saved.
+    scheduleAutoSave();
   },
   onBimpPointerDown: (x: number, y: number) => {
     if (!state.editingBimp) return;
@@ -467,7 +537,51 @@ const handlers: ViewHandlers = {
     // Turning auto-run on should sync the view with the current code.
     if (next) runCurrentScript();
   },
-  onDocChange: () => scheduleAutoRun(),
+  onDocChange: () => {
+    scheduleAutoRun();
+    scheduleAutoSave();
+  },
+  onToggleScriptPicker: () =>
+    setState({
+      showScriptPicker: !state.showScriptPicker,
+      savedScripts: loadAllScripts(),
+    }),
+  onLoadScript: loadSavedScript,
+  onDeleteScript: (name: string) => {
+    deleteScript(name);
+    const scripts = loadAllScripts();
+    setState({ savedScripts: scripts });
+    // If we deleted the current script, fall back to the first example.
+    if (state.scriptId.type === "saved" && state.scriptId.name === name) {
+      const ex = EXAMPLES[0];
+      setState({
+        code: ex.code,
+        scriptId: { type: "example", name: ex.name },
+      });
+      setEditorCode(ex.code);
+      saveLastOpened({ type: "example", name: ex.name });
+      runWithCode(ex.code, true);
+    }
+  },
+  onRenameCurrentScript: (newName: string) => {
+    if (state.scriptId.type !== "saved") return;
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === state.scriptId.name) {
+      // Force re-render so the input reverts to the stored name.
+      setState({ savedScripts: loadAllScripts() });
+      return;
+    }
+    if (!renameScript(state.scriptId.name, trimmed)) {
+      // Duplicate / empty — revert input display.
+      setState({ savedScripts: loadAllScripts() });
+      return;
+    }
+    setState({
+      scriptId: { type: "saved", name: trimmed },
+      savedScripts: loadAllScripts(),
+    });
+    saveLastOpened({ type: "saved", name: trimmed });
+  },
   onDownloadBmp: () => {
     if (!lastProgram) return;
     triggerDownload(
@@ -483,6 +597,12 @@ const handlers: ViewHandlers = {
       "program.json",
       "application/json"
     );
+  },
+  onDownloadScript: () => {
+    const code = getEditorCode();
+    const baseName = state.scriptId.name.replace(/[^\w\-. ]/g, "_").trim();
+    const filename = `${baseName || "script"}.js`;
+    triggerDownload(code, filename, "application/javascript");
   },
 };
 
@@ -526,6 +646,14 @@ function init() {
       direction: "vertical",
     });
 
+    // Ctrl/Cmd+S downloads the current script.
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === "s") {
+        e.preventDefault();
+        handlers.onDownloadScript();
+      }
+    });
+
     // Escape closes any open modal
     document.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
@@ -538,6 +666,9 @@ function init() {
       } else if (state.showExamplePicker) {
         e.preventDefault();
         setState({ showExamplePicker: false });
+      } else if (state.showScriptPicker) {
+        e.preventDefault();
+        setState({ showScriptPicker: false });
       }
     });
 
@@ -701,8 +832,41 @@ function init() {
       { passive: false }
     );
 
-    // Auto-run the first example on load
-    runWithCode(EXAMPLES[0].code, true);
+    // Restore the last-opened script (saved or example), else fall back
+    // to the first bundled example.
+    const last = loadLastOpened();
+    let bootCode: string | null = null;
+    if (last?.type === "saved") {
+      const script = getScript(last.name);
+      if (script) {
+        bootCode = script.code;
+        setState({
+          code: script.code,
+          scriptId: { type: "saved", name: last.name },
+        });
+        setEditorCode(script.code);
+      }
+    } else if (last?.type === "example") {
+      const ex = EXAMPLES.find((e) => e.name === last.name);
+      if (ex) {
+        bootCode = ex.code;
+        setState({
+          code: ex.code,
+          scriptId: { type: "example", name: ex.name },
+        });
+        setEditorCode(ex.code);
+      }
+    }
+    if (bootCode === null) {
+      const ex = EXAMPLES[0];
+      bootCode = ex.code;
+      setState({
+        code: ex.code,
+        scriptId: { type: "example", name: ex.name },
+      });
+      saveLastOpened({ type: "example", name: ex.name });
+    }
+    runWithCode(bootCode, true);
   });
 }
 
