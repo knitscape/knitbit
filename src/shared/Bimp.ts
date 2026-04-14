@@ -21,11 +21,18 @@ export class Bimp {
   width: number;
   height: number;
   pixels: Uint8ClampedArray;
+  palette?: string[];
 
-  constructor(width: number, height: number, pixels: ArrayLike<number>) {
+  constructor(
+    width: number,
+    height: number,
+    pixels: ArrayLike<number>,
+    palette?: string[]
+  ) {
     this.width = width;
     this.height = height;
     this.pixels = new Uint8ClampedArray(pixels);
+    if (palette) this.palette = palette;
   }
 
   static fromJSON(jsonObj: BimpJSON): Bimp {

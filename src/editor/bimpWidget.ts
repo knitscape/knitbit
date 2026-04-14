@@ -1,0 +1,193 @@
+import { Extension, RangeSetBuilder } from "@codemirror/state";
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  ViewPlugin,
+  ViewUpdate,
+  WidgetType,
+} from "@codemirror/view";
+import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
+import type { EditorState } from "@codemirror/state";
+
+export interface BimpEditTarget {
+  arrayFrom: number;
+  arrayTo: number;
+  width: number;
+  height: number;
+  pixels: number[];
+  palette?: string[];
+}
+
+export type OnEditBimp = (target: BimpEditTarget) => void;
+
+const MAX_PIXELS = 4096;
+
+function expressionChildren(node: SyntaxNode): SyntaxNode[] {
+  const out: SyntaxNode[] = [];
+  for (let c = node.firstChild; c; c = c.nextSibling) {
+    const n = c.name;
+    if (n === "(" || n === ")" || n === "[" || n === "]" || n === ",") continue;
+    out.push(c);
+  }
+  return out;
+}
+
+function parseNumberLiteral(node: SyntaxNode, state: EditorState): number | null {
+  if (node.name !== "Number") return null;
+  const v = Number(state.doc.sliceString(node.from, node.to));
+  return Number.isFinite(v) ? v : null;
+}
+
+function parseStringLiteral(node: SyntaxNode, state: EditorState): string | null {
+  if (node.name !== "String") return null;
+  const raw = state.doc.sliceString(node.from, node.to);
+  if (raw.length < 2) return null;
+  const quote = raw[0];
+  if (quote !== '"' && quote !== "'" && quote !== "`") return null;
+  if (raw[raw.length - 1] !== quote) return null;
+  return raw.slice(1, -1);
+}
+
+function parseBimpNew(node: SyntaxNode, state: EditorState): BimpEditTarget | null {
+  const nameNode = node.getChild("VariableName");
+  if (!nameNode) return null;
+  if (state.doc.sliceString(nameNode.from, nameNode.to) !== "Bimp") return null;
+
+  const argList = node.getChild("ArgList");
+  if (!argList) return null;
+  const args = expressionChildren(argList);
+  if (args.length < 3 || args.length > 4) return null;
+
+  const width = parseNumberLiteral(args[0], state);
+  const height = parseNumberLiteral(args[1], state);
+  if (width === null || height === null) return null;
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return null;
+  if (width <= 0 || height <= 0) return null;
+  if (width * height > MAX_PIXELS) return null;
+
+  if (args[2].name !== "ArrayExpression") return null;
+  const pixelNodes = expressionChildren(args[2]);
+  const pixels: number[] = [];
+  for (const pn of pixelNodes) {
+    const v = parseNumberLiteral(pn, state);
+    if (v === null || !Number.isInteger(v) || v < 0 || v > 255) return null;
+    pixels.push(v);
+  }
+  if (pixels.length !== width * height) return null;
+
+  let palette: string[] | undefined;
+  if (args.length === 4) {
+    if (args[3].name !== "ArrayExpression") return null;
+    const colorNodes = expressionChildren(args[3]);
+    const colors: string[] = [];
+    for (const cn of colorNodes) {
+      const s = parseStringLiteral(cn, state);
+      if (s === null) return null;
+      colors.push(s);
+    }
+    palette = colors;
+  }
+
+  return {
+    arrayFrom: args[2].from,
+    arrayTo: args[2].to,
+    width,
+    height,
+    pixels,
+    palette,
+  };
+}
+
+class BimpEditButton extends WidgetType {
+  constructor(
+    private target: BimpEditTarget,
+    private onClick: OnEditBimp
+  ) {
+    super();
+  }
+
+  eq(other: BimpEditButton): boolean {
+    const a = this.target;
+    const b = other.target;
+    if (a.arrayFrom !== b.arrayFrom || a.arrayTo !== b.arrayTo) return false;
+    if (a.width !== b.width || a.height !== b.height) return false;
+    if (a.pixels.length !== b.pixels.length) return false;
+    for (let i = 0; i < a.pixels.length; i++) {
+      if (a.pixels[i] !== b.pixels[i]) return false;
+    }
+    const pa = a.palette ?? [];
+    const pb = b.palette ?? [];
+    if (pa.length !== pb.length) return false;
+    for (let i = 0; i < pa.length; i++) {
+      if (pa[i] !== pb[i]) return false;
+    }
+    return true;
+  }
+
+  toDOM(): HTMLElement {
+    const btn = document.createElement("button");
+    btn.className = "cm-bimp-edit-btn";
+    btn.title = `Edit bitmap (${this.target.width}\u00D7${this.target.height})`;
+    btn.textContent = "\u270E";
+    btn.onmousedown = (e) => e.preventDefault();
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.onClick(this.target);
+    };
+    return btn;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+function buildDecos(view: EditorView, onClick: OnEditBimp): DecorationSet {
+  const found: { pos: number; target: BimpEditTarget }[] = [];
+  const tree = syntaxTree(view.state);
+  tree.iterate({
+    enter(nodeRef) {
+      if (nodeRef.name !== "NewExpression") return;
+      const target = parseBimpNew(nodeRef.node, view.state);
+      if (target) found.push({ pos: nodeRef.to, target });
+    },
+  });
+  found.sort((a, b) => a.pos - b.pos);
+
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const { pos, target } of found) {
+    builder.add(
+      pos,
+      pos,
+      Decoration.widget({
+        widget: new BimpEditButton(target, onClick),
+        side: 1,
+      })
+    );
+  }
+  return builder.finish();
+}
+
+export function bimpEditExtension(onEditBimp: OnEditBimp): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = buildDecos(view, onEditBimp);
+      }
+      update(update: ViewUpdate) {
+        const treeChanged =
+          syntaxTree(update.startState) !== syntaxTree(update.state);
+        if (update.docChanged || update.viewportChanged || treeChanged) {
+          this.decorations = buildDecos(update.view, onEditBimp);
+        }
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+    }
+  );
+}

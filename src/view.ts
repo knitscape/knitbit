@@ -1,10 +1,21 @@
 import { html } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { EXAMPLES } from "./examples";
-import { createEditor } from "./editor";
+import { createEditor, type BimpEditTarget } from "./editor";
 import type { LayoutMode } from "./simulation/types";
+import { SYMBOL_DATA } from "./shared/opData";
 
 export type SimState = "idle" | "relaxing" | "relaxed";
+
+export interface BimpEditState {
+  arrayFrom: number;
+  arrayTo: number;
+  width: number;
+  height: number;
+  pixels: number[];
+  palette?: string[];
+  brushValue: number;
+}
 
 export interface AppState {
   code: string;
@@ -17,6 +28,7 @@ export interface AppState {
   tickMs: number;
   showHelp: boolean;
   layoutMode: LayoutMode;
+  editingBimp: BimpEditState | null;
 }
 
 export interface ViewHandlers {
@@ -29,6 +41,35 @@ export interface ViewHandlers {
   onRun: () => void;
   onToggleHelp: () => void;
   onToggleLayoutMode: () => void;
+  onEditBimp: (target: BimpEditTarget) => void;
+  onBimpCancel: () => void;
+  onBimpSave: () => void;
+  onBimpCellPaint: (index: number) => void;
+  onBimpBrushSelect: (value: number) => void;
+}
+
+const FALLBACK_COLORS: string[] = [
+  SYMBOL_DATA[0].color,
+  SYMBOL_DATA[1].color,
+  SYMBOL_DATA[2].color,
+  SYMBOL_DATA[3].color,
+  SYMBOL_DATA[4].color,
+  SYMBOL_DATA[5].color,
+  SYMBOL_DATA[6].color,
+  "#a8dadc",
+  "#e63946",
+  "#f4a261",
+  "#e9c46a",
+  "#2a9d8f",
+  "#264653",
+  "#f1faee",
+  "#457b9d",
+  "#1d3557",
+];
+
+function colorFor(value: number, palette?: string[]): string {
+  if (palette && value >= 0 && value < palette.length) return palette[value];
+  return FALLBACK_COLORS[Math.max(0, value) % FALLBACK_COLORS.length];
 }
 
 export function view(state: AppState, handlers: ViewHandlers) {
@@ -89,41 +130,64 @@ export function view(state: AppState, handlers: ViewHandlers) {
                   createEditor(
                     el as HTMLElement,
                     state.code,
-                    handlers.onRun
+                    handlers.onRun,
+                    handlers.onEditBimp
                   );
               })}
               class="flex-1 w-full overflow-hidden bg-[var(--base0)]"></div>
           </div>
           <div
             id="chart-pane"
-            class="flex overflow-hidden min-h-0 bg-[var(--base1)] [border-top:1px_solid_var(--base3)] relative">
+            class="flex flex-col overflow-hidden min-h-0 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
             <div
-              id="chart-sidebar-wrap"
-              class="shrink-0 overflow-hidden bg-[var(--base2)] [border-right:1px_solid_var(--base3)]">
-              <div id="chart-sidebar-inner" class="px-2 py-3 will-change-transform">
-                <canvas id="chart-sidebar" class="block"></canvas>
+              id="chart-content"
+              class="flex flex-1 overflow-hidden relative">
+              <div
+                id="chart-sidebar-wrap"
+                class="shrink-0 overflow-hidden bg-[var(--base2)] [border-right:1px_solid_var(--base3)]">
+                <div
+                  id="chart-sidebar-inner"
+                  class="px-2 py-3 will-change-transform">
+                  <canvas id="chart-sidebar" class="block"></canvas>
+                </div>
               </div>
+              <div
+                id="chart-scroll"
+                class="flex-1 overflow-auto chart-scrollbar">
+                <div class="px-3 py-3 w-max">
+                  <div class="relative">
+                    <canvas id="chart-canvas" class="block"></canvas>
+                    <div
+                      id="chart-col-highlight"
+                      class="chart-col-highlight pointer-events-none absolute hidden"></div>
+                  </div>
+                </div>
+              </div>
+              <div
+                id="chart-row-highlight"
+                class="chart-row-highlight pointer-events-none absolute left-0 right-0 hidden"></div>
             </div>
             <div
-              id="chart-scroll"
-              class="flex-1 overflow-auto chart-scrollbar">
-              <div class="px-3 py-3 w-max">
-                <canvas id="chart-canvas" class="block"></canvas>
+              class="shrink-0 flex items-center justify-between gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
+              <span
+                id="chart-coord"
+                class="font-mono text-[0.72rem] text-[color:var(--base7)] tabular-nums">
+                &nbsp;
+              </span>
+              <div class="flex items-center gap-[2px]">
+                <button
+                  class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.7rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                  title="Zoom out"
+                  @click=${handlers.onZoomOut}>
+                  <i class="fa-solid fa-minus"></i>
+                </button>
+                <button
+                  class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.7rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                  title="Zoom in"
+                  @click=${handlers.onZoomIn}>
+                  <i class="fa-solid fa-plus"></i>
+                </button>
               </div>
-            </div>
-            <div class="absolute bottom-2 right-2 flex gap-[2px] z-10">
-              <button
-                class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.45rem] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
-                title="Zoom in"
-                @click=${handlers.onZoomIn}>
-                <i class="fa-solid fa-plus"></i>
-              </button>
-              <button
-                class="bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.45rem] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
-                title="Zoom out"
-                @click=${handlers.onZoomOut}>
-                <i class="fa-solid fa-minus"></i>
-              </button>
             </div>
           </div>
         </div>
@@ -191,7 +255,133 @@ export function view(state: AppState, handlers: ViewHandlers) {
     </div>
 
     ${state.showHelp ? helpModal(handlers) : ""}
+    ${state.editingBimp ? bimpModal(state.editingBimp, handlers) : ""}
   `;
+}
+
+function bimpModal(edit: BimpEditState, handlers: ViewHandlers) {
+  const { width, height, pixels, palette, brushValue } = edit;
+  const cellSizePx = Math.max(18, Math.min(44, Math.floor(320 / Math.max(width, height))));
+
+  const brushValues: number[] = [];
+  if (palette && palette.length > 0) {
+    for (let i = 0; i < palette.length; i++) brushValues.push(i);
+  } else {
+    const seen = new Set<number>();
+    for (const v of pixels) seen.add(v);
+    for (let i = 0; i <= 6; i++) seen.add(i);
+    const arr = Array.from(seen).sort((a, b) => a - b);
+    brushValues.push(...arr);
+  }
+
+  return html`
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      @click=${(e: MouseEvent) => {
+        if (e.target === e.currentTarget) handlers.onBimpCancel();
+      }}>
+      <div
+        class="bg-[var(--base1)] border border-[color:var(--base3)] rounded-[4px] shadow-xl flex flex-col overflow-hidden">
+        <div
+          class="flex items-center justify-between gap-3 py-[0.5rem] px-4 [border-bottom:1px_solid_var(--base3)] shrink-0">
+          <span
+            class="text-[0.78rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base10)]">
+            Bitmap editor \u2014 ${width}\u00D7${height}
+          </span>
+          <button
+            class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+            title="Close without saving"
+            @click=${handlers.onBimpCancel}>
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="px-5 py-4 flex flex-col gap-4">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mr-1">
+              Brush
+            </span>
+            ${brushValues.map(
+              (v) => html`<button
+                class="flex items-center justify-center w-[1.8rem] h-[1.8rem] text-[0.72rem] font-mono rounded-[3px] cursor-pointer ${brushValue ===
+                v
+                  ? "outline outline-2 outline-[var(--accent)] outline-offset-1"
+                  : "outline outline-1 outline-[color:var(--base4)]"}"
+                style="background: ${colorFor(v, palette)}; color: ${pickTextColor(
+                  colorFor(v, palette)
+                )}"
+                title=${palette && v < palette.length
+                  ? `${v} \u2014 ${palette[v]}`
+                  : `${v}`}
+                @click=${() => handlers.onBimpBrushSelect(v)}>
+                ${v}
+              </button>`
+            )}
+          </div>
+
+          <div
+            class="inline-grid gap-[2px] bg-[var(--base3)] p-[2px] rounded-[3px] self-start select-none"
+            style="grid-template-columns: repeat(${width}, ${cellSizePx}px);"
+            @mouseleave=${() => {}}>
+            ${pixels.map(
+              (v, idx) => html`<div
+                class="flex items-center justify-center font-mono text-[0.65rem] cursor-pointer"
+                style="width: ${cellSizePx}px; height: ${cellSizePx}px; background: ${colorFor(
+                  v,
+                  palette
+                )}; color: ${pickTextColor(colorFor(v, palette))}"
+                @mousedown=${(e: MouseEvent) => {
+                  e.preventDefault();
+                  handlers.onBimpCellPaint(idx);
+                }}
+                @mouseenter=${(e: MouseEvent) => {
+                  if (e.buttons > 0) handlers.onBimpCellPaint(idx);
+                }}>
+                ${v}
+              </div>`
+            )}
+          </div>
+
+          ${palette
+            ? ""
+            : html`<p
+                class="text-[0.72rem] text-[color:var(--base7)] italic">
+                No palette defined. Pass a 4th arg like
+                <code class="font-mono">["#f00", "#0f0"]</code> to set colors.
+              </p>`}
+        </div>
+
+        <div
+          class="flex justify-end gap-2 py-[0.5rem] px-4 [border-top:1px_solid_var(--base3)] shrink-0">
+          <button
+            class="py-[0.25rem] px-[0.7rem] text-[0.78rem] rounded-[3px] bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+            @click=${handlers.onBimpCancel}>
+            Cancel
+          </button>
+          <button
+            autofocus
+            class="py-[0.25rem] px-[0.9rem] text-[0.78rem] [font-variation-settings:'wght'_600] rounded-[3px] bg-[var(--accent)] text-white border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
+            @click=${handlers.onBimpSave}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function pickTextColor(bg: string): string {
+  const hex = bg.replace("#", "");
+  if (hex.length !== 3 && hex.length !== 6) return "var(--base13)";
+  const expand = hex.length === 3
+    ? hex.split("").map((c) => c + c).join("")
+    : hex;
+  const r = parseInt(expand.slice(0, 2), 16);
+  const g = parseInt(expand.slice(2, 4), 16);
+  const b = parseInt(expand.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.55 ? "#111" : "#fff";
 }
 
 function helpModal(handlers: ViewHandlers) {

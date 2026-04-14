@@ -14,6 +14,51 @@ const ROW_NUM_PAD_PX = 6;
 const CTRL_FONT_PX = 12;
 const ARROW_FONT_PX = 13;
 
+export type SidebarColumn = "rowNum" | "racking" | "yarn" | "direction";
+
+export interface SidebarLayout {
+  rowNumX: number;
+  rowNumW: number;
+  rackX: number;
+  rackW: number;
+  yarnX: number;
+  yarnW: number;
+  dirX: number;
+  dirW: number;
+  totalWidth: number;
+}
+
+export function sidebarLayout(height: number): SidebarLayout {
+  const rowNumDigits = Math.max(2, String(height).length);
+  const rowNumW = ROW_NUM_DIGIT_PX * rowNumDigits + ROW_NUM_PAD_PX;
+  const rackX = rowNumW + GUTTER_PX;
+  const yarnX = rackX + RACK_WIDTH + GUTTER_PX;
+  const dirX = yarnX + YARN_WIDTH + GUTTER_PX;
+  return {
+    rowNumX: 0,
+    rowNumW,
+    rackX,
+    rackW: RACK_WIDTH,
+    yarnX,
+    yarnW: YARN_WIDTH,
+    dirX,
+    dirW: DIR_WIDTH,
+    totalWidth: dirX + DIR_WIDTH,
+  };
+}
+
+export function sidebarColumnAt(
+  x: number,
+  layout: SidebarLayout
+): SidebarColumn | null {
+  if (x >= layout.rowNumX && x < layout.rowNumX + layout.rowNumW)
+    return "rowNum";
+  if (x >= layout.rackX && x < layout.rackX + layout.rackW) return "racking";
+  if (x >= layout.yarnX && x < layout.yarnX + layout.yarnW) return "yarn";
+  if (x >= layout.dirX && x < layout.dirX + layout.dirW) return "direction";
+  return null;
+}
+
 function sizeCanvas(canvas: HTMLCanvasElement, w: number, h: number) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(w * dpr);
@@ -36,12 +81,8 @@ export function drawChart(
 ) {
   const { width, height } = ops;
 
-  // Row-number column width fits the digit count at a constant per-digit width.
-  const rowNumDigits = Math.max(2, String(height).length);
-  const rowNumWidth = ROW_NUM_DIGIT_PX * rowNumDigits + ROW_NUM_PAD_PX;
-  // Sidebar layout (left → right): [row#] [gutter] [racking] [gutter] [yarn] [gutter] [direction]
-  const sidebarWidth =
-    rowNumWidth + GUTTER_PX + RACK_WIDTH + GUTTER_PX + YARN_WIDTH + GUTTER_PX + DIR_WIDTH;
+  const layout = sidebarLayout(height);
+  const sidebarWidth = layout.totalWidth;
   const opsWidth = width * cellSize;
   const totalHeight = height * cellSize;
 
@@ -58,10 +99,7 @@ export function drawChart(
   const colFg = styles.getPropertyValue("--base10").trim() || "#ccc";
   const colMuted = styles.getPropertyValue("--base7").trim() || "#888";
 
-  const rowNumX = 0;
-  const rackX = rowNumWidth + GUTTER_PX;
-  const yarnX = rackX + RACK_WIDTH + GUTTER_PX;
-  const dirX = yarnX + YARN_WIDTH + GUTTER_PX;
+  const { rowNumX, rowNumW, rackX, yarnX, dirX } = layout;
 
   // Cap font sizes so text stays readable when cellSize gets large; floor so it
   // doesn't disappear when zoomed way out. Text still scales between those bounds.
@@ -78,7 +116,7 @@ export function drawChart(
     sCtx.font = `${ctrlFontPx}px monospace`;
     sCtx.textAlign = "right";
     sCtx.textBaseline = "middle";
-    sCtx.fillText(String(y + 1), rowNumWidth - 2, cellSize / 2);
+    sCtx.fillText(String(y + 1), rowNumW - 2, cellSize / 2);
     sCtx.restore();
 
     // ── Racking column ────────────────────────────────────────────────

@@ -1,11 +1,17 @@
 import { render } from "lit-html";
 import Split from "split.js";
 
-import { drawChart } from "./drawChart";
+import { drawChart, sidebarLayout, sidebarColumnAt } from "./drawChart";
+import { Op } from "./shared/opData";
 import { simulate } from "./simulation/simulate";
 import { runScript } from "./execute";
 import { view, type AppState, type ViewHandlers } from "./view";
-import { getEditorCode, setEditorCode } from "./editor";
+import {
+  getEditorCode,
+  setEditorCode,
+  replaceBimpPixels,
+  type BimpEditTarget,
+} from "./editor";
 import { EXAMPLES } from "./examples";
 import type { KnittingProgram } from "./simulation/types";
 
@@ -23,6 +29,7 @@ let state: AppState = {
   tickMs: 0,
   showHelp: false,
   layoutMode: "technical",
+  editingBimp: null,
 };
 
 // Last successful program — kept so we can re-render on zoom/mode changes
@@ -171,6 +178,39 @@ const handlers: ViewHandlers = {
     });
     initSimulation(false);
   },
+  onEditBimp: (target: BimpEditTarget) => {
+    setState({
+      editingBimp: {
+        arrayFrom: target.arrayFrom,
+        arrayTo: target.arrayTo,
+        width: target.width,
+        height: target.height,
+        pixels: target.pixels.slice(),
+        palette: target.palette ? target.palette.slice() : undefined,
+        brushValue: target.pixels[0] ?? 0,
+      },
+    });
+  },
+  onBimpCancel: () => setState({ editingBimp: null }),
+  onBimpSave: () => {
+    if (!state.editingBimp) return;
+    const { arrayFrom, arrayTo, pixels } = state.editingBimp;
+    replaceBimpPixels(arrayFrom, arrayTo, pixels);
+    setState({ editingBimp: null });
+    runCurrentScript();
+  },
+  onBimpCellPaint: (idx: number) => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    if (cur.pixels[idx] === cur.brushValue) return;
+    const pixels = cur.pixels.slice();
+    pixels[idx] = cur.brushValue;
+    setState({ editingBimp: { ...cur, pixels } });
+  },
+  onBimpBrushSelect: (value: number) => {
+    if (!state.editingBimp) return;
+    setState({ editingBimp: { ...state.editingBimp, brushValue: value } });
+  },
 };
 
 function loop() {
@@ -213,9 +253,13 @@ function init() {
       direction: "vertical",
     });
 
-    // Escape closes the help modal
+    // Escape closes any open modal
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && state.showHelp) {
+      if (e.key !== "Escape") return;
+      if (state.editingBimp) {
+        e.preventDefault();
+        setState({ editingBimp: null });
+      } else if (state.showHelp) {
         e.preventDefault();
         setState({ showHelp: false });
       }
@@ -239,6 +283,93 @@ function init() {
       },
       { passive: false }
     );
+
+    // Hover: track row/col under cursor, update bottom-bar text and row stripe.
+    const chartContent = document.getElementById("chart-content");
+    const opsCanvas = document.getElementById(
+      "chart-canvas"
+    ) as HTMLCanvasElement | null;
+    const sidebarCanvas = document.getElementById(
+      "chart-sidebar"
+    ) as HTMLCanvasElement | null;
+    const coordEl = document.getElementById("chart-coord");
+    const rowHighlight = document.getElementById("chart-row-highlight");
+    const colHighlight = document.getElementById("chart-col-highlight");
+    let lastMouse: { x: number; y: number } | null = null;
+
+    const hideHover = () => {
+      if (coordEl) coordEl.innerHTML = "&nbsp;";
+      if (rowHighlight) rowHighlight.classList.add("hidden");
+      if (colHighlight) colHighlight.classList.add("hidden");
+    };
+
+    const updateHover = () => {
+      if (!lastMouse || !lastProgram || !opsCanvas || !chartContent)
+        return hideHover();
+      const cs = state.cellSize;
+      const h = lastProgram.height;
+      const w = lastProgram.width;
+
+      const opsRect = opsCanvas.getBoundingClientRect();
+      const yInCanvas = lastMouse.y - opsRect.top;
+      const rowFromTop = Math.floor(yInCanvas / cs);
+      if (rowFromTop < 0 || rowFromTop >= h) return hideHover();
+      const row = h - 1 - rowFromTop;
+
+      const xInCanvas = lastMouse.x - opsRect.left;
+      const overOps =
+        xInCanvas >= 0 && xInCanvas < w * cs && lastMouse.x <= opsRect.right;
+      const col = overOps ? Math.floor(xInCanvas / cs) : -1;
+
+      let label = `row ${row + 1}`;
+      if (overOps) {
+        const opIdx = lastProgram.ops.pixel(col, row);
+        const opName = Op[opIdx] ?? "?";
+        label = `row ${row + 1}, col ${col + 1} \u2014 Op.${opName}`;
+      } else if (sidebarCanvas) {
+        const sbRect = sidebarCanvas.getBoundingClientRect();
+        const xInSb = lastMouse.x - sbRect.left;
+        const layout = sidebarLayout(h);
+        const which = sidebarColumnAt(xInSb, layout);
+        if (which === "racking") {
+          label += `, racking ${lastProgram.racking[row] ?? 0}`;
+        } else if (which === "yarn") {
+          label += `, yarn ${lastProgram.yarnFeeder[row] ?? 0}`;
+        } else if (which === "direction") {
+          label += `, direction ${lastProgram.direction[row] ?? "right"}`;
+        }
+      }
+      if (coordEl) coordEl.textContent = label;
+
+      if (rowHighlight) {
+        const contentRect = chartContent.getBoundingClientRect();
+        const top = opsRect.top - contentRect.top + rowFromTop * cs;
+        rowHighlight.style.top = `${top}px`;
+        rowHighlight.style.height = `${cs}px`;
+        rowHighlight.classList.remove("hidden");
+      }
+      if (colHighlight) {
+        if (overOps) {
+          colHighlight.style.left = `${col * cs}px`;
+          colHighlight.style.top = "0";
+          colHighlight.style.width = `${cs}px`;
+          colHighlight.style.height = `${h * cs}px`;
+          colHighlight.classList.remove("hidden");
+        } else {
+          colHighlight.classList.add("hidden");
+        }
+      }
+    };
+
+    chartContent?.addEventListener("mousemove", (e) => {
+      lastMouse = { x: e.clientX, y: e.clientY };
+      updateHover();
+    });
+    chartContent?.addEventListener("mouseleave", () => {
+      lastMouse = null;
+      hideHover();
+    });
+    chartScroll?.addEventListener("scroll", updateHover);
 
     // Ctrl+scroll to zoom on the chart pane
     const chartPane = document.getElementById("chart-pane");

@@ -23,13 +23,17 @@ import {
 
 import { knitscapeTheme, knitscapeHighlightStyle } from "./theme";
 import { knitscapeCompletions } from "./completions";
+import { bimpEditExtension, type OnEditBimp } from "./bimpWidget";
+
+export type { BimpEditTarget, OnEditBimp } from "./bimpWidget";
 
 let editorView: EditorView | null = null;
 
 export function createEditor(
   parent: HTMLElement,
   initialCode: string,
-  onRunScript: () => void
+  onRunScript: () => void,
+  onEditBimp: OnEditBimp
 ): EditorView {
   if (editorView) {
     editorView.destroy();
@@ -48,6 +52,7 @@ export function createEditor(
         autocompletion({ override: [knitscapeCompletions] }),
         syntaxHighlighting(knitscapeHighlightStyle),
         knitscapeTheme,
+        bimpEditExtension(onEditBimp),
         keymap.of([
           {
             key: "Mod-Enter",
@@ -87,5 +92,16 @@ export function setEditorCode(code: string): void {
       to: editorView.state.doc.length,
       insert: code,
     },
+  });
+}
+
+export function replaceBimpPixels(
+  from: number,
+  to: number,
+  pixels: number[]
+): void {
+  if (!editorView) return;
+  editorView.dispatch({
+    changes: { from, to, insert: `[${pixels.join(", ")}]` },
   });
 }
