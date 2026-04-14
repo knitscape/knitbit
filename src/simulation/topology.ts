@@ -10,13 +10,37 @@ interface Loop {
   id: number;
 }
 
+/**
+ * Total knit+tuck operations in a program — the maximum meaningful value
+ * for the stitch-scrubber. Misses and transfers aren't counted since they
+ * don't create new visible geometry on their own.
+ */
+export function countStitches(program: KnittingProgram): number {
+  const pixels = program.ops.pixels;
+  let n = 0;
+  for (let i = 0; i < pixels.length; i++) {
+    const op = pixels[i];
+    if (
+      op === Op.FKNIT ||
+      op === Op.FTUCK ||
+      op === Op.BKNIT ||
+      op === Op.BTUCK
+    ) {
+      n++;
+    }
+  }
+  return n;
+}
+
 export function generateTopology(
   program: KnittingProgram,
-  mode: LayoutMode = "technical"
+  mode: LayoutMode = "technical",
+  maxStitch: number = Infinity
 ): TopologyResult {
   const { width, height } = program;
   const gridWidth = 2 * width;
   const gridHeight = height + 1;
+  const stopAt = Math.max(0, maxStitch);
 
   // Needle bed state — each needle holds a stack of loops (bottom → top)
   const frontBed: Loop[][] = Array.from({ length: width }, () => []);
@@ -77,7 +101,12 @@ export function generateTopology(
   }
 
   // ── Process each program row ─────────────────────────────────────────────
-  for (let row = 0; row < height; row++) {
+  // We count knit+tuck ops as "stitches" and stop once we've processed
+  // `stopAt` of them. Misses and transfers that precede the stopping
+  // stitch are still processed (they're free); misses/transfers that come
+  // after the last stitch we process are not.
+  let stitchCount = 0;
+  outer: for (let row = 0; row < height; row++) {
     const dir = program.direction[row];
     const yarn = program.yarnFeeder[row];
     const rack = program.racking[row];
@@ -93,6 +122,8 @@ export function generateTopology(
     const path = yarnPathMap.get(yarn)!;
 
     for (const n of needles) {
+      if (stitchCount >= stopAt) break outer;
+
       const op = program.ops.pixel(n, row);
 
       // ── MISS: yarn floats past, no contact nodes ─────────────────────
@@ -184,6 +215,8 @@ export function generateTopology(
         lastHead[bed][n] = { j: newJ, needle: prev.needle };
         currentHeads[bed][n].push(head1, head2);
       }
+
+      stitchCount++;
     }
   }
 

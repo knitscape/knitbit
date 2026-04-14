@@ -10,6 +10,10 @@ import {
 import {
   bracketMatching,
   syntaxHighlighting,
+  codeFolding,
+  foldGutter,
+  foldKeymap,
+  ensureSyntaxTree,
 } from "@codemirror/language";
 import {
   autocompletion,
@@ -23,7 +27,12 @@ import {
 
 import { knitscapeTheme, knitscapeHighlightStyle } from "./theme";
 import { knitscapeCompletions } from "./completions";
-import { bimpEditExtension, type OnEditBimp } from "./bimpWidget";
+import {
+  bimpEditExtension,
+  bimpFoldService,
+  foldAllBimpPixels,
+  type OnEditBimp,
+} from "./bimpWidget";
 
 export type { BimpEditTarget, OnEditBimp } from "./bimpWidget";
 
@@ -52,6 +61,9 @@ export function createEditor(
         autocompletion({ override: [knitscapeCompletions] }),
         syntaxHighlighting(knitscapeHighlightStyle),
         knitscapeTheme,
+        codeFolding(),
+        foldGutter(),
+        bimpFoldService,
         bimpEditExtension(onEditBimp),
         keymap.of([
           {
@@ -66,6 +78,7 @@ export function createEditor(
           ...defaultKeymap,
           ...historyKeymap,
           ...searchKeymap,
+          ...foldKeymap,
         ]),
         EditorState.tabSize.of(2),
       ],
@@ -76,6 +89,10 @@ export function createEditor(
   new ResizeObserver(() => {
     editorView?.requestMeasure();
   }).observe(parent);
+
+  if (ensureSyntaxTree(editorView.state, editorView.state.doc.length, 100)) {
+    foldAllBimpPixels(editorView);
+  }
 
   return editorView;
 }
@@ -93,15 +110,22 @@ export function setEditorCode(code: string): void {
       insert: code,
     },
   });
+  if (ensureSyntaxTree(editorView.state, editorView.state.doc.length, 100)) {
+    foldAllBimpPixels(editorView);
+  }
 }
 
 export function replaceBimpPixels(
-  from: number,
-  to: number,
+  arrayFrom: number,
+  arrayTo: number,
   pixels: number[]
 ): void {
   if (!editorView) return;
+  // Replace only the content between `[` and `]` so any existing fold range
+  // (which covers the inner span) stays valid after the edit.
+  const innerFrom = arrayFrom + 1;
+  const innerTo = arrayTo - 1;
   editorView.dispatch({
-    changes: { from, to, insert: `[${pixels.join(", ")}]` },
+    changes: { from: innerFrom, to: innerTo, insert: pixels.join(", ") },
   });
 }

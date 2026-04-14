@@ -94,6 +94,14 @@
     inset -1px 0 0 rgba(229, 229, 229, 0.18);
 }
 
+/* Suppress the default disclosure triangle on our custom dropdown. */
+.chart-menu > summary {
+  list-style: none;
+}
+.chart-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
 /* ─── CodeMirror fill container ────────────────────────────────────────── */
 
 #code-editor .cm-editor {

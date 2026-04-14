@@ -21,6 +21,7 @@ export interface SimulateOptions {
   cellAspect: number;
   resetCamera?: boolean;
   layoutMode?: LayoutMode;
+  maxStitch?: number;
 }
 
 export function simulate(program: KnittingProgram, options: SimulateOptions) {
@@ -33,34 +34,39 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
   };
 
   const canvas = options.canvas;
+  const layoutMode: LayoutMode = options.layoutMode ?? "technical";
   let relaxed = false;
   let sim: ReturnType<typeof yarnRelaxation> | undefined;
   let lastTickMs = 0;
 
+  function buildGeometry(maxStitch: number) {
+    const topology = generateTopology(program, layoutMode, maxStitch);
+    const { nodes, nodeMap } = layoutNodes(topology, program, params);
+    const segments = computeYarnPathSpline(
+      topology,
+      program,
+      nodes,
+      nodeMap,
+      params
+    );
+    const yarnData = Object.entries(segments).map(([yarnIndex, segmentArr]) => {
+      return {
+        yarnIndex: yarnIndex,
+        pts: segmentsToPoints(segmentArr, nodes),
+        diameter: YARN_DIAMETER,
+        color: hexToRgb(program.palette[Number(yarnIndex) - 1]).map(
+          (colorInt: number) => colorInt / 255
+        ),
+      };
+    });
+    return { nodes, segments, yarnData };
+  }
+
   const t0 = performance.now();
-
-  const topology = generateTopology(program, options.layoutMode ?? "technical");
-  const { nodes, nodeMap } = layoutNodes(topology, program, params);
-  const segments = computeYarnPathSpline(
-    topology,
-    program,
-    nodes,
-    nodeMap,
-    params
+  let { nodes, segments, yarnData } = buildGeometry(
+    options.maxStitch ?? Infinity
   );
-
   const topologyMs = performance.now() - t0;
-
-  const yarnData = Object.entries(segments).map(([yarnIndex, segmentArr]) => {
-    return {
-      yarnIndex: yarnIndex,
-      pts: segmentsToPoints(segmentArr, nodes),
-      diameter: YARN_DIAMETER,
-      color: hexToRgb(program.palette[Number(yarnIndex) - 1]).map(
-        (colorInt: number) => colorInt / 255
-      ),
-    };
-  });
 
   renderer.init(yarnData, canvas, options.resetCamera ?? true);
 
@@ -96,11 +102,20 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
     return sim !== undefined && sim.running();
   }
 
+  function setMaxStitch(n: number) {
+    if (sim) sim.stop();
+    sim = undefined;
+    relaxed = false;
+    ({ nodes, segments, yarnData } = buildGeometry(n));
+    renderer.init(yarnData, canvas, false);
+  }
+
   return {
     relax,
     stopSim,
     draw,
     isRelaxing,
+    setMaxStitch,
     topologyMs,
     getTickMs: () => lastTickMs,
     fitCamera: () => renderer.fitCamera(),

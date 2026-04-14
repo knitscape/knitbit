@@ -22,30 +22,36 @@ export interface AppState {
   cellSize: number;
   statusText: string;
   statusClass: string;
-  activeExample: number; // index into EXAMPLES, -1 = none
   simState: SimState;
   topologyMs: number;
   tickMs: number;
   showHelp: boolean;
+  showExamplePicker: boolean;
   layoutMode: LayoutMode;
   editingBimp: BimpEditState | null;
+  maxStitch: number;
+  totalStitches: number;
 }
 
 export interface ViewHandlers {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onSelectExample: (i: number) => void;
+  onToggleExamplePicker: () => void;
   onRelax: () => void;
   onReset: () => void;
   onFitCamera: () => void;
   onRun: () => void;
   onToggleHelp: () => void;
   onToggleLayoutMode: () => void;
+  onScrub: (n: number) => void;
   onEditBimp: (target: BimpEditTarget) => void;
   onBimpCancel: () => void;
   onBimpSave: () => void;
   onBimpCellPaint: (index: number) => void;
   onBimpBrushSelect: (value: number) => void;
+  onDownloadBmp: () => void;
+  onDownloadJson: () => void;
 }
 
 const FALLBACK_COLORS: string[] = [
@@ -75,27 +81,6 @@ function colorFor(value: number, palette?: string[]): string {
 export function view(state: AppState, handlers: ViewHandlers) {
   return html`
     <div class="flex flex-1 overflow-hidden min-h-0">
-      <div
-        class="w-[158px] shrink-0 bg-[var(--base1)] [border-right:1px_solid_var(--base3)] flex flex-col overflow-hidden">
-        <div
-          class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] pt-[0.6rem] pb-[0.4rem] px-3 shrink-0 [border-bottom:1px_solid_var(--base3)]">
-          Examples
-        </div>
-        <div class="sidebar-list overflow-y-auto flex-1 py-[0.3rem]">
-          ${EXAMPLES.map(
-            (ex, i) => html`
-              <button
-                class="block w-full text-left py-[0.35rem] px-3 rounded-none text-[0.8rem] border-0 leading-[1.3] whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer [transition:background_80ms] ${state.activeExample === i ? "bg-[var(--accent)] text-white" : "bg-transparent text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"}"
-                title=${ex.description}
-                @click=${() => handlers.onSelectExample(i)}>
-                ${ex.name}
-              </button>
-            `
-          )}
-        </div>
-      </div>
-
-      <div class="flex flex-1 overflow-hidden min-w-0">
         <div id="editor-pane" class="flex flex-col overflow-hidden min-w-0">
           <div id="code-pane" class="flex flex-col overflow-hidden min-h-0">
             <div
@@ -105,6 +90,12 @@ export function view(state: AppState, handlers: ViewHandlers) {
                 Script
               </span>
               <div class="flex items-center gap-[0.3rem]">
+                <button
+                  class="flex items-center gap-[0.35rem] bg-[var(--base2)] border border-[color:var(--base4)] py-[0.2rem] px-[0.5rem] text-[0.72rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                  title="Load an example"
+                  @click=${handlers.onToggleExamplePicker}>
+                  <i class="fa-solid fa-folder-open"></i> Load
+                </button>
                 <button
                   class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
                   title="Help"
@@ -144,7 +135,7 @@ export function view(state: AppState, handlers: ViewHandlers) {
               class="flex flex-1 overflow-hidden relative">
               <div
                 id="chart-sidebar-wrap"
-                class="shrink-0 overflow-hidden bg-[var(--base2)] [border-right:1px_solid_var(--base3)]">
+                class="shrink-0 overflow-hidden bg-[var(--base2)] [border-right:1px_solid_var(--base3)] cursor-grab">
                 <div
                   id="chart-sidebar-inner"
                   class="px-2 py-3 will-change-transform">
@@ -153,7 +144,7 @@ export function view(state: AppState, handlers: ViewHandlers) {
               </div>
               <div
                 id="chart-scroll"
-                class="flex-1 overflow-auto chart-scrollbar">
+                class="flex-1 overflow-auto chart-scrollbar cursor-grab">
                 <div class="px-3 py-3 w-max">
                   <div class="relative">
                     <canvas id="chart-canvas" class="block"></canvas>
@@ -174,7 +165,43 @@ export function view(state: AppState, handlers: ViewHandlers) {
                 class="font-mono text-[0.72rem] text-[color:var(--base7)] tabular-nums">
                 &nbsp;
               </span>
-              <div class="flex items-center gap-[2px]">
+              <div class="flex items-center gap-[0.3rem]">
+                <details class="chart-menu relative">
+                  <summary
+                    class="list-none flex items-center gap-[0.3rem] h-[1.5rem] px-[0.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.72rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                    title="Download program data">
+                    <i class="fa-solid fa-download text-[0.7rem]"></i>
+                    <span>Download</span>
+                    <i class="fa-solid fa-caret-down text-[0.6rem] opacity-70"></i>
+                  </summary>
+                  <div
+                    class="absolute right-0 bottom-full mb-1 min-w-[11rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] shadow-lg z-20 overflow-hidden">
+                    <button
+                      class="block w-full text-left py-[0.35rem] px-[0.6rem] text-[0.78rem] text-[color:var(--base12)] bg-transparent border-0 cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                      @click=${(e: MouseEvent) => {
+                        (
+                          (e.currentTarget as HTMLElement).closest(
+                            "details"
+                          ) as HTMLDetailsElement
+                        ).open = false;
+                        handlers.onDownloadBmp();
+                      }}>
+                      Bitmap (.bmp)
+                    </button>
+                    <button
+                      class="block w-full text-left py-[0.35rem] px-[0.6rem] text-[0.78rem] text-[color:var(--base12)] bg-transparent border-0 cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+                      @click=${(e: MouseEvent) => {
+                        (
+                          (e.currentTarget as HTMLElement).closest(
+                            "details"
+                          ) as HTMLDetailsElement
+                        ).open = false;
+                        handlers.onDownloadJson();
+                      }}>
+                      Control data (.json)
+                    </button>
+                  </div>
+                </details>
                 <button
                   class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.7rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
                   title="Zoom out"
@@ -245,8 +272,29 @@ export function view(state: AppState, handlers: ViewHandlers) {
                 : ""}
             </div>
           </div>
+          ${state.totalStitches > 0
+            ? html`<div
+                class="shrink-0 flex items-center gap-3 py-[0.35rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
+                <span
+                  class="text-[0.7rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] shrink-0">
+                  Stitch
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max=${state.totalStitches}
+                  step="1"
+                  .value=${String(state.maxStitch)}
+                  @input=${(e: Event) =>
+                    handlers.onScrub(+(e.target as HTMLInputElement).value)}
+                  class="flex-1 accent-[var(--accent)]" />
+                <span
+                  class="font-mono text-[0.72rem] text-[color:var(--base10)] tabular-nums w-[5.5rem] text-right shrink-0">
+                  ${state.maxStitch} / ${state.totalStitches}
+                </span>
+              </div>`
+            : ""}
         </div>
-      </div>
     </div>
 
     <div
@@ -256,6 +304,43 @@ export function view(state: AppState, handlers: ViewHandlers) {
 
     ${state.showHelp ? helpModal(handlers) : ""}
     ${state.editingBimp ? bimpModal(state.editingBimp, handlers) : ""}
+    ${state.showExamplePicker ? examplePickerModal(handlers) : ""}
+  `;
+}
+
+function examplePickerModal(handlers: ViewHandlers) {
+  return html`
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      @click=${(e: MouseEvent) => {
+        if (e.target === e.currentTarget) handlers.onToggleExamplePicker();
+      }}>
+      <div
+        class="bg-[var(--base1)] border border-[color:var(--base3)] rounded-[4px] shadow-xl w-[min(360px,100%)] max-h-[80vh] flex flex-col overflow-hidden">
+        <div
+          class="flex items-center justify-between gap-3 py-[0.5rem] px-4 [border-bottom:1px_solid_var(--base3)] shrink-0">
+          <span
+            class="text-[0.78rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base10)]">
+            Load example
+          </span>
+          <button
+            class="flex items-center justify-center w-[1.5rem] h-[1.5rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.75rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+            title="Close"
+            @click=${handlers.onToggleExamplePicker}>
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="overflow-y-auto flex-1 py-[0.3rem]">
+          ${EXAMPLES.map(
+            (ex, i) => html`<button
+              class="block w-full text-left py-[0.4rem] px-4 text-[0.82rem] bg-transparent border-0 text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"
+              @click=${() => handlers.onSelectExample(i)}>
+              ${ex.name}
+            </button>`
+          )}
+        </div>
+      </div>
+    </div>
   `;
 }
 

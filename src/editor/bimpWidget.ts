@@ -1,4 +1,8 @@
-import { Extension, RangeSetBuilder } from "@codemirror/state";
+import {
+  Extension,
+  RangeSetBuilder,
+  StateEffect,
+} from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -7,7 +11,7 @@ import {
   ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, foldService, foldEffect } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import type { EditorState } from "@codemirror/state";
 
@@ -169,6 +173,52 @@ function buildDecos(view: EditorView, onClick: OnEditBimp): DecorationSet {
     );
   }
   return builder.finish();
+}
+
+const MIN_PIXELS_TO_AUTOFOLD = 32;
+
+function foldRangeFor(target: BimpEditTarget): { from: number; to: number } | null {
+  const from = target.arrayFrom + 1;
+  const to = target.arrayTo - 1;
+  if (to <= from) return null;
+  return { from, to };
+}
+
+export const bimpFoldService = foldService.of(
+  (state, lineStart, lineEnd) => {
+    const tree = syntaxTree(state);
+    let result: { from: number; to: number } | null = null;
+    tree.iterate({
+      from: lineStart,
+      to: lineEnd,
+      enter(nodeRef) {
+        if (result) return false;
+        if (nodeRef.name !== "NewExpression") return;
+        const target = parseBimpNew(nodeRef.node, state);
+        if (!target) return;
+        if (target.arrayFrom < lineStart || target.arrayFrom > lineEnd) return;
+        result = foldRangeFor(target);
+        if (result) return false;
+      },
+    });
+    return result;
+  }
+);
+
+export function foldAllBimpPixels(view: EditorView): void {
+  const effects: StateEffect<unknown>[] = [];
+  const tree = syntaxTree(view.state);
+  tree.iterate({
+    enter(nodeRef) {
+      if (nodeRef.name !== "NewExpression") return;
+      const target = parseBimpNew(nodeRef.node, view.state);
+      if (!target) return;
+      if (target.pixels.length < MIN_PIXELS_TO_AUTOFOLD) return;
+      const range = foldRangeFor(target);
+      if (range) effects.push(foldEffect.of(range));
+    },
+  });
+  if (effects.length > 0) view.dispatch({ effects });
 }
 
 export function bimpEditExtension(onEditBimp: OnEditBimp): Extension {

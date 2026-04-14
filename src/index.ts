@@ -3,7 +3,13 @@ import Split from "split.js";
 
 import { drawChart, sidebarLayout, sidebarColumnAt } from "./drawChart";
 import { Op } from "./shared/opData";
+import {
+  encodeOpsBmp,
+  encodeControlJson,
+  triggerDownload,
+} from "./download";
 import { simulate } from "./simulation/simulate";
+import { countStitches } from "./simulation/topology";
 import { runScript } from "./execute";
 import { view, type AppState, type ViewHandlers } from "./view";
 import {
@@ -23,13 +29,15 @@ let state: AppState = {
   cellSize: 20,
   statusText: "Press Run or Ctrl+Enter to generate the chart.",
   statusClass: "text-[color:var(--base7)]",
-  activeExample: 0,
+  showExamplePicker: false,
   simState: "idle",
   topologyMs: 0,
   tickMs: 0,
   showHelp: false,
   layoutMode: "technical",
   editingBimp: null,
+  maxStitch: 0,
+  totalStitches: 0,
 };
 
 // Last successful program — kept so we can re-render on zoom/mode changes
@@ -42,6 +50,7 @@ let simRelax: (() => void) | undefined;
 let simIsRelaxing: (() => boolean) | undefined;
 let simGetTickMs: (() => number) | undefined;
 let simFitCamera: (() => void) | undefined;
+let simSetMaxStitch: ((n: number) => void) | undefined;
 
 let needsRender = true;
 
@@ -86,6 +95,7 @@ function initSimulation(resetCamera = true) {
     simRelax = undefined;
     simIsRelaxing = undefined;
     simGetTickMs = undefined;
+    simSetMaxStitch = undefined;
   }
 
   const simCanvas = document.getElementById(
@@ -98,6 +108,7 @@ function initSimulation(resetCamera = true) {
     cellAspect: 1,
     resetCamera,
     layoutMode: state.layoutMode,
+    maxStitch: state.maxStitch,
   });
 
   simDraw = result.draw;
@@ -106,6 +117,7 @@ function initSimulation(resetCamera = true) {
   simIsRelaxing = result.isRelaxing;
   simGetTickMs = result.getTickMs;
   simFitCamera = result.fitCamera;
+  simSetMaxStitch = result.setMaxStitch;
   setState({ simState: "idle", topologyMs: result.topologyMs, tickMs: 0 });
 }
 
@@ -125,9 +137,12 @@ function runWithCode(code: string) {
 
     const w = program.width;
     const h = program.height;
+    const total = countStitches(program);
     setState({
       statusText: `OK \u2014 ${w}\u00d7${h}`,
       statusClass: "text-green-400",
+      totalStitches: total,
+      maxStitch: total,
     });
 
     renderChart();
@@ -140,13 +155,13 @@ function runWithCode(code: string) {
 
 function runCurrentScript() {
   const code = getEditorCode();
-  setState({ code, activeExample: -1 });
+  setState({ code });
   runWithCode(code);
 }
 
 function selectExample(i: number) {
   const ex = EXAMPLES[i];
-  setState({ code: ex.code, activeExample: i });
+  setState({ code: ex.code, showExamplePicker: false });
   setEditorCode(ex.code);
   runWithCode(ex.code);
 }
@@ -172,11 +187,18 @@ const handlers: ViewHandlers = {
   },
   onRun: runCurrentScript,
   onToggleHelp: () => setState({ showHelp: !state.showHelp }),
+  onToggleExamplePicker: () =>
+    setState({ showExamplePicker: !state.showExamplePicker }),
   onToggleLayoutMode: () => {
     setState({
       layoutMode: state.layoutMode === "technical" ? "compressed" : "technical",
     });
     initSimulation(false);
+  },
+  onScrub: (n: number) => {
+    const clamped = Math.max(0, Math.min(n, state.totalStitches));
+    setState({ maxStitch: clamped, simState: "idle" });
+    if (simSetMaxStitch) simSetMaxStitch(clamped);
   },
   onEditBimp: (target: BimpEditTarget) => {
     setState({
@@ -210,6 +232,22 @@ const handlers: ViewHandlers = {
   onBimpBrushSelect: (value: number) => {
     if (!state.editingBimp) return;
     setState({ editingBimp: { ...state.editingBimp, brushValue: value } });
+  },
+  onDownloadBmp: () => {
+    if (!lastProgram) return;
+    triggerDownload(
+      encodeOpsBmp(lastProgram.ops),
+      "program.bmp",
+      "image/bmp"
+    );
+  },
+  onDownloadJson: () => {
+    if (!lastProgram) return;
+    triggerDownload(
+      encodeControlJson(lastProgram),
+      "program.json",
+      "application/json"
+    );
   },
 };
 
@@ -262,6 +300,9 @@ function init() {
       } else if (state.showHelp) {
         e.preventDefault();
         setState({ showHelp: false });
+      } else if (state.showExamplePicker) {
+        e.preventDefault();
+        setState({ showExamplePicker: false });
       }
     });
 
@@ -283,6 +324,36 @@ function init() {
       },
       { passive: false }
     );
+
+    // Drag-to-pan: ops grid pans both axes, sidebar drags vertically only.
+    const startPan = (e: PointerEvent, allowX: boolean) => {
+      if (e.button !== 0 || !chartScroll) return;
+      const target = e.currentTarget as HTMLElement;
+      target.setPointerCapture(e.pointerId);
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startScrollLeft = chartScroll.scrollLeft;
+      const startScrollTop = chartScroll.scrollTop;
+      document.body.style.cursor = "grabbing";
+
+      const onMove = (ev: PointerEvent) => {
+        chartScroll.scrollTop = startScrollTop - (ev.clientY - startY);
+        if (allowX)
+          chartScroll.scrollLeft = startScrollLeft - (ev.clientX - startX);
+      };
+      const onEnd = () => {
+        target.removeEventListener("pointermove", onMove);
+        target.removeEventListener("pointerup", onEnd);
+        target.removeEventListener("pointercancel", onEnd);
+        document.body.style.cursor = "";
+      };
+      target.addEventListener("pointermove", onMove);
+      target.addEventListener("pointerup", onEnd);
+      target.addEventListener("pointercancel", onEnd);
+      e.preventDefault();
+    };
+    chartScroll?.addEventListener("pointerdown", (e) => startPan(e, true));
+    sidebarWrap?.addEventListener("pointerdown", (e) => startPan(e, false));
 
     // Hover: track row/col under cursor, update bottom-bar text and row stripe.
     const chartContent = document.getElementById("chart-content");
