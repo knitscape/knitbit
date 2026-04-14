@@ -33,6 +33,9 @@ export interface TopologyResult {
   gridHeight: number; // program.height + 1
   nodes: TopologyNode[];
   yarnPaths: { yarnIndex: number; nodeIndices: number[] }[];
+  /** Racking value at the point where topology generation stopped —
+   *  applied to all back-bed nodes as a horizontal offset in layout. */
+  currentRacking: number;
 }
 
 // ─── Downstream types (used by layout, relaxation, renderer) ─────────────────

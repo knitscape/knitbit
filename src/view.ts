@@ -4,8 +4,11 @@ import { EXAMPLES } from "./examples";
 import { createEditor, type BimpEditTarget } from "./editor";
 import type { LayoutMode } from "./simulation/types";
 import { SYMBOL_DATA } from "./shared/opData";
+import { Bimp } from "./shared/Bimp";
 
 export type SimState = "idle" | "relaxing" | "relaxed";
+
+export type BimpTool = "brush" | "line" | "rect" | "flood";
 
 export interface BimpEditState {
   exprFrom: number;
@@ -15,6 +18,9 @@ export interface BimpEditState {
   pixels: number[];
   palette?: string[];
   brushValue: number;
+  activeTool: BimpTool;
+  dragFrom: [number, number] | null;
+  dragTo: [number, number] | null;
 }
 
 export interface AppState {
@@ -49,7 +55,11 @@ export interface ViewHandlers {
   onEditBimp: (target: BimpEditTarget) => void;
   onBimpCancel: () => void;
   onBimpSave: () => void;
-  onBimpCellPaint: (index: number) => void;
+  onBimpPointerDown: (x: number, y: number) => void;
+  onBimpPointerMove: (x: number, y: number) => void;
+  onBimpPointerUp: () => void;
+  onBimpToolSelect: (tool: BimpTool) => void;
+  onBimpShift: (dx: number, dy: number) => void;
   onBimpBrushSelect: (value: number) => void;
   onBimpResize: (width: number, height: number) => void;
   onBimpPaletteColorChange: (index: number, color: string) => void;
@@ -430,6 +440,49 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
                 }}
                 class="w-[3.5rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] py-[0.15rem] px-[0.35rem] text-[0.78rem] font-mono text-[color:var(--base12)] text-right" />
             </div>
+
+            <span
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] ml-3">
+              Shift
+            </span>
+            ${[
+              { dx: -1, dy: 0, icon: "fa-arrow-left", title: "Shift left" },
+              { dx: 1, dy: 0, icon: "fa-arrow-right", title: "Shift right" },
+              { dx: 0, dy: -1, icon: "fa-arrow-up", title: "Shift up" },
+              { dx: 0, dy: 1, icon: "fa-arrow-down", title: "Shift down" },
+            ].map(
+              (d) => html`<button
+                class="flex items-center justify-center w-[1.6rem] h-[1.6rem] text-[0.72rem] rounded-[3px] cursor-pointer bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"
+                title=${d.title}
+                @click=${() => handlers.onBimpShift(d.dx, d.dy)}>
+                <i class="fa-solid ${d.icon}"></i>
+              </button>`
+            )}
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <span
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mr-1">
+              Tool
+            </span>
+            ${(
+              [
+                { tool: "brush", icon: "fa-paintbrush", title: "Brush" },
+                { tool: "line", icon: "fa-slash", title: "Line" },
+                { tool: "rect", icon: "fa-vector-square", title: "Rectangle" },
+                { tool: "flood", icon: "fa-fill-drip", title: "Flood fill" },
+              ] as const
+            ).map(
+              (t) => html`<button
+                class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.8rem] rounded-[3px] cursor-pointer [transition:background_80ms,color_80ms] ${edit.activeTool ===
+                t.tool
+                  ? "bg-[var(--accent)] text-white border-0"
+                  : "bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"}"
+                title=${t.title}
+                @click=${() => handlers.onBimpToolSelect(t.tool)}>
+                <i class="fa-solid ${t.icon}"></i>
+              </button>`
+            )}
           </div>
 
           <div class="flex items-center gap-2 flex-wrap">
@@ -473,28 +526,32 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
             </button>
           </div>
 
-          <div
-            class="inline-grid gap-[2px] bg-[var(--base3)] p-[2px] rounded-[3px] self-start select-none"
-            style="grid-template-columns: repeat(${width}, ${cellSizePx}px);"
-            @mouseleave=${() => {}}>
-            ${pixels.map(
-              (v, idx) => html`<div
-                class="flex items-center justify-center font-mono text-[0.65rem] cursor-pointer"
-                style="width: ${cellSizePx}px; height: ${cellSizePx}px; background: ${colorFor(
-                  v,
-                  palette
-                )}; color: ${pickTextColor(colorFor(v, palette))}"
-                @mousedown=${(e: MouseEvent) => {
-                  e.preventDefault();
-                  handlers.onBimpCellPaint(idx);
-                }}
-                @mouseenter=${(e: MouseEvent) => {
-                  if (e.buttons > 0) handlers.onBimpCellPaint(idx);
-                }}>
-                ${v}
-              </div>`
-            )}
-          </div>
+          <canvas
+            class="block cursor-crosshair select-none rounded-[3px] bg-[var(--base3)]"
+            style="width: ${width * cellSizePx}px; height: ${height * cellSizePx}px;"
+            ${ref((el) => {
+              if (el) drawBimpCanvas(el as HTMLCanvasElement, edit, cellSizePx);
+            })}
+            @pointerdown=${(e: PointerEvent) => {
+              e.preventDefault();
+              const [cx, cy] = canvasToCell(e, cellSizePx);
+              (e.currentTarget as HTMLCanvasElement).setPointerCapture(
+                e.pointerId
+              );
+              handlers.onBimpPointerDown(cx, cy);
+            }}
+            @pointermove=${(e: PointerEvent) => {
+              if (!edit.dragFrom) return;
+              const [cx, cy] = canvasToCell(e, cellSizePx);
+              handlers.onBimpPointerMove(cx, cy);
+            }}
+            @pointerup=${(e: PointerEvent) => {
+              (e.currentTarget as HTMLCanvasElement).releasePointerCapture(
+                e.pointerId
+              );
+              handlers.onBimpPointerUp();
+            }}
+            @pointercancel=${() => handlers.onBimpPointerUp()}></canvas>
         </div>
 
         <div
@@ -513,6 +570,91 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
         </div>
     </div>
   `;
+}
+
+function canvasToCell(e: PointerEvent, cellSize: number): [number, number] {
+  const canvas = e.currentTarget as HTMLCanvasElement;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.clientWidth / rect.width;
+  const scaleY = canvas.clientHeight / rect.height;
+  const x = Math.floor(((e.clientX - rect.left) * scaleX) / cellSize);
+  const y = Math.floor(((e.clientY - rect.top) * scaleY) / cellSize);
+  return [x, y];
+}
+
+function getDisplayPixels(edit: BimpEditState): number[] {
+  if (!edit.dragFrom || !edit.dragTo) return edit.pixels;
+  if (edit.activeTool !== "line" && edit.activeTool !== "rect") {
+    return edit.pixels;
+  }
+  const bimp = new Bimp(edit.width, edit.height, edit.pixels);
+  const result =
+    edit.activeTool === "line"
+      ? bimp.line(edit.dragFrom, edit.dragTo, edit.brushValue)
+      : bimp.rect(edit.dragFrom, edit.dragTo, edit.brushValue);
+  return Array.from(result.pixels);
+}
+
+function drawBimpCanvas(
+  canvas: HTMLCanvasElement,
+  edit: BimpEditState,
+  cellSize: number
+): void {
+  const { width, height, palette } = edit;
+  const pixels = getDisplayPixels(edit);
+
+  const dpr = window.devicePixelRatio || 1;
+  const pxW = width * cellSize;
+  const pxH = height * cellSize;
+  if (canvas.width !== pxW * dpr || canvas.height !== pxH * dpr) {
+    canvas.width = pxW * dpr;
+    canvas.height = pxH * dpr;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const v = pixels[y * width + x];
+      ctx.fillStyle = colorFor(v, palette);
+      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+    }
+  }
+
+  if (cellSize >= 10) {
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.18)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= width; x++) {
+      ctx.moveTo(x * cellSize + 0.5, 0);
+      ctx.lineTo(x * cellSize + 0.5, pxH);
+    }
+    for (let y = 0; y <= height; y++) {
+      ctx.moveTo(0, y * cellSize + 0.5);
+      ctx.lineTo(pxW, y * cellSize + 0.5);
+    }
+    ctx.stroke();
+  }
+
+  if (cellSize >= 24) {
+    ctx.font = `${Math.floor(cellSize * 0.35)}px monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const v = pixels[y * width + x];
+        ctx.fillStyle = pickTextColor(colorFor(v, palette));
+        ctx.fillText(
+          String(v),
+          x * cellSize + cellSize / 2,
+          y * cellSize + cellSize / 2
+        );
+      }
+    }
+  }
 }
 
 function pickTextColor(bg: string): string {

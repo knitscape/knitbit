@@ -11,23 +11,16 @@ interface Loop {
 }
 
 /**
- * Total knit+tuck operations in a program — the maximum meaningful value
- * for the stitch-scrubber. Misses and transfers aren't counted since they
- * don't create new visible geometry on their own.
+ * Total meaningful program steps — knits, tucks, and transfers. Misses
+ * are skipped since they don't affect bed state or create geometry.
+ * Used as the max for the program scrubber.
  */
 export function countStitches(program: KnittingProgram): number {
   const pixels = program.ops.pixels;
   let n = 0;
   for (let i = 0; i < pixels.length; i++) {
     const op = pixels[i];
-    if (
-      op === Op.FKNIT ||
-      op === Op.FTUCK ||
-      op === Op.BKNIT ||
-      op === Op.BTUCK
-    ) {
-      n++;
-    }
+    if (op !== Op.MISS) n++;
   }
   return n;
 }
@@ -101,15 +94,16 @@ export function generateTopology(
   }
 
   // ── Process each program row ─────────────────────────────────────────────
-  // We count knit+tuck ops as "stitches" and stop once we've processed
-  // `stopAt` of them. Misses and transfers that precede the stopping
-  // stitch are still processed (they're free); misses/transfers that come
-  // after the last stitch we process are not.
+  // Each non-miss op (knit, tuck, or transfer) counts as one scrubbable
+  // step. We stop once we've processed `stopAt` of them. Misses are free
+  // (they don't change state) and don't consume a step.
   let stitchCount = 0;
+  let currentRacking = 0;
   outer: for (let row = 0; row < height; row++) {
     const dir = program.direction[row];
     const yarn = program.yarnFeeder[row];
     const rack = program.racking[row];
+    currentRacking = rack;
 
     // Traverse needles in carriage direction
     const needles =
@@ -130,15 +124,29 @@ export function generateTopology(
       if (op === Op.MISS) continue;
 
       // ── Transfers: move loops between beds ───────────────────────────
+      // We mutate the existing head nodes so they reflect where the loop
+      // physically is now — bed flips, and gridI shifts by the needle
+      // delta so the rendered loop follows the transfer (combined with
+      // the racking-based back-bed shift applied in layout).
       if (op === Op.FTB) {
         const dest = n + rack;
         if (dest >= 0 && dest < width) {
           backBed[dest].push(...frontBed[n]);
           frontBed[n] = [];
-          lastHead.back[dest] = { ...lastHead.front[n] };
-          currentHeads.back[dest] = currentHeads.front[n];
+          // lastHead.needle tracks the CURRENT home of the loop's heads
+          // so later knits place their heads at that needle's gridI.
+          // After mutation, the heads live at dest, so reflect that.
+          lastHead.back[dest] = { j: lastHead.front[n].j, needle: dest };
+          const moved = currentHeads.front[n];
+          const deltaI = (dest - n) * 2;
+          for (const idx of moved) {
+            nodes[idx].bed = "back";
+            nodes[idx].gridI += deltaI;
+          }
+          currentHeads.back[dest] = moved;
           currentHeads.front[n] = [];
         }
+        stitchCount++;
         continue;
       }
       if (op === Op.BTF) {
@@ -146,10 +154,17 @@ export function generateTopology(
         if (dest >= 0 && dest < width) {
           frontBed[dest].push(...backBed[n]);
           backBed[n] = [];
-          lastHead.front[dest] = { ...lastHead.back[n] };
-          currentHeads.front[dest] = currentHeads.back[n];
+          lastHead.front[dest] = { j: lastHead.back[n].j, needle: dest };
+          const moved = currentHeads.back[n];
+          const deltaI = (dest - n) * 2;
+          for (const idx of moved) {
+            nodes[idx].bed = "front";
+            nodes[idx].gridI += deltaI;
+          }
+          currentHeads.front[dest] = moved;
           currentHeads.back[n] = [];
         }
+        stitchCount++;
         continue;
       }
 
@@ -237,5 +252,5 @@ export function generateTopology(
     ([yarnIndex, nodeIndices]) => ({ yarnIndex, nodeIndices })
   );
 
-  return { gridWidth, gridHeight, nodes, yarnPaths };
+  return { gridWidth, gridHeight, nodes, yarnPaths, currentRacking };
 }

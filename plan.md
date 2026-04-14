@@ -1,9 +1,10 @@
 # Dev plan
 
-- [ ] figure out whatever is going on with the renderer
-- [ ] proper CN stacking
+# simulation/rendering
+
+- figure out whatever is going on with the renderer
+- proper CN stacking
 - [ ] separate the back/front bed CNs a bit more
-- [ ] run the program live
 
 ## script editing pane
 
@@ -18,5 +19,8 @@
 - [ ] use bimp editing tools in the bitmap widget (line, rect, paint, etc)
 - [ ] fix the color picker styles
 - [ ] upload your own bitmap to the bitmap widget
-
 - [ ] figure out how to enable someone to change the yarn color palette
+
+# examples
+
+- something that shows off the racking

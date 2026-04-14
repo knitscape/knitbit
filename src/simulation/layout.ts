@@ -40,13 +40,22 @@ export function layoutNodes(
   const HALF_STITCH = STITCH_WIDTH / 2;
   const STITCH_HEIGHT = STITCH_WIDTH * ASPECT;
 
-  const posMap = new Map<string, number>(); // "gridI,gridJ" → physical index
+  // Racking shifts the entire back bed horizontally. FTB convention is
+  // dest = n + rack (loop goes straight across at current racking), which
+  // means back[N] physically sits at front[N - rack]. So positive rack
+  // shifts the back bed LEFT.
+  const backShift = -topology.currentRacking * STITCH_WIDTH;
+
+  const posMap = new Map<string, number>(); // "bed,gridI,gridJ" → physical index
   const nodes: NodeType[] = [];
   const nodeMap: number[] = [];
 
   for (let i = 0; i < topology.nodes.length; i++) {
     const topo = topology.nodes[i];
-    const key = `${topo.gridI},${topo.gridJ}`;
+    // Bed is part of the key: front/back nodes at the same grid position
+    // live at different z and shouldn't merge (especially once racking
+    // shifts the back bed into the front bed's x range).
+    const key = `${topo.bed},${topo.gridI},${topo.gridJ}`;
 
     if (posMap.has(key)) {
       nodeMap[i] = posMap.get(key)!;
@@ -68,8 +77,10 @@ export function layoutNodes(
       const tlbr = [-offset, -offset, 0];
       const bltr = [offset, offset, 0];
 
+      const xShift = topo.bed === "back" ? backShift : 0;
+
       nodes.push({
-        pos: [topo.gridI * HALF_STITCH, topo.gridJ * STITCH_HEIGHT, z],
+        pos: [topo.gridI * HALF_STITCH + xShift, topo.gridJ * STITCH_HEIGHT, z],
         f: [0, 0, 0],
         v: [0, 0, 0],
         q0: side ? tlbr : bltr,

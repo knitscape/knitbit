@@ -11,7 +11,8 @@ import {
 import { simulate } from "./simulation/simulate";
 import { countStitches } from "./simulation/topology";
 import { runScript } from "./execute";
-import { view, type AppState, type ViewHandlers } from "./view";
+import { Bimp } from "./shared/Bimp";
+import { view, type AppState, type ViewHandlers, type BimpTool } from "./view";
 import {
   getEditorCode,
   setEditorCode,
@@ -316,6 +317,9 @@ const handlers: ViewHandlers = {
         pixels: target.pixels.slice(),
         palette: target.palette ? target.palette.slice() : undefined,
         brushValue: target.pixels[0] ?? 0,
+        activeTool: "brush",
+        dragFrom: null,
+        dragTo: null,
       },
     });
   },
@@ -333,12 +337,90 @@ const handlers: ViewHandlers = {
     setState({ editingBimp: null });
     runCurrentScript();
   },
-  onBimpCellPaint: (idx: number) => {
+  onBimpPointerDown: (x: number, y: number) => {
     if (!state.editingBimp) return;
     const cur = state.editingBimp;
-    if (cur.pixels[idx] === cur.brushValue) return;
-    const pixels = cur.pixels.slice();
-    pixels[idx] = cur.brushValue;
+    if (x < 0 || x >= cur.width || y < 0 || y >= cur.height) return;
+
+    if (cur.activeTool === "brush") {
+      const pixels = cur.pixels.slice();
+      pixels[y * cur.width + x] = cur.brushValue;
+      setState({
+        editingBimp: { ...cur, pixels, dragFrom: [x, y], dragTo: [x, y] },
+      });
+      if (state.autoRun) runCurrentScript();
+    } else if (cur.activeTool === "flood") {
+      const bimp = new Bimp(cur.width, cur.height, cur.pixels);
+      const pixels = Array.from(bimp.flood([x, y], cur.brushValue).pixels);
+      setState({
+        editingBimp: { ...cur, pixels, dragFrom: null, dragTo: null },
+      });
+      if (state.autoRun) runCurrentScript();
+    } else {
+      // line or rect — start drag, preview only (commit on pointerup)
+      setState({
+        editingBimp: { ...cur, dragFrom: [x, y], dragTo: [x, y] },
+      });
+    }
+  },
+  onBimpPointerMove: (x: number, y: number) => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    if (!cur.dragFrom) return;
+    const cx = Math.max(0, Math.min(cur.width - 1, x));
+    const cy = Math.max(0, Math.min(cur.height - 1, y));
+
+    if (cur.activeTool === "brush") {
+      const idx = cy * cur.width + cx;
+      if (cur.pixels[idx] === cur.brushValue) return;
+      const pixels = cur.pixels.slice();
+      pixels[idx] = cur.brushValue;
+      setState({ editingBimp: { ...cur, pixels, dragTo: [cx, cy] } });
+      if (state.autoRun) runCurrentScript();
+    } else if (cur.activeTool === "line" || cur.activeTool === "rect") {
+      if (cur.dragTo && cur.dragTo[0] === cx && cur.dragTo[1] === cy) return;
+      setState({ editingBimp: { ...cur, dragTo: [cx, cy] } });
+    }
+  },
+  onBimpPointerUp: () => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    if (!cur.dragFrom) return;
+
+    if (
+      (cur.activeTool === "line" || cur.activeTool === "rect") &&
+      cur.dragTo
+    ) {
+      const bimp = new Bimp(cur.width, cur.height, cur.pixels);
+      const result =
+        cur.activeTool === "line"
+          ? bimp.line(cur.dragFrom, cur.dragTo, cur.brushValue)
+          : bimp.rect(cur.dragFrom, cur.dragTo, cur.brushValue);
+      const pixels = Array.from(result.pixels);
+      setState({
+        editingBimp: { ...cur, pixels, dragFrom: null, dragTo: null },
+      });
+      if (state.autoRun) runCurrentScript();
+    } else {
+      setState({ editingBimp: { ...cur, dragFrom: null, dragTo: null } });
+    }
+  },
+  onBimpToolSelect: (tool: BimpTool) => {
+    if (!state.editingBimp) return;
+    setState({
+      editingBimp: {
+        ...state.editingBimp,
+        activeTool: tool,
+        dragFrom: null,
+        dragTo: null,
+      },
+    });
+  },
+  onBimpShift: (dx: number, dy: number) => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    const bimp = new Bimp(cur.width, cur.height, cur.pixels);
+    const pixels = Array.from(bimp.shift(dx, dy).pixels);
     setState({ editingBimp: { ...cur, pixels } });
     if (state.autoRun) runCurrentScript();
   },
