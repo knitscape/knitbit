@@ -1,41 +1,23 @@
-const w = 12, h = 20;
+const w = 50,
+  h = 50;
 const repeat = Math.floor(w / 2);
-const ops = [];
-const yarnFeeder = [];
-const racking = [];
 
-for (let row = 0; row < h; row++) {
-  const section = Math.floor(row / 4) % repeat;
-  const phase = row % 4;
-
-  if (phase === 2) {
-    // Transfer two stitches symmetrically toward center
-    yarnFeeder.push(null);
-    racking.push(1);
-    for (let col = 0; col < w; col++) {
-      ops.push(col === section || col === w - 1 - section
-        ? Op.FTB : Op.EMPTY);
-    }
-  } else if (phase === 3) {
-    // Return loops to front bed
-    yarnFeeder.push(null);
-    racking.push(0);
-    for (let col = 0; col < w; col++) {
-      ops.push(col === section + 1 || col === w - section
-        ? Op.BTF : Op.EMPTY);
-    }
-  } else {
-    yarnFeeder.push(1);
-    racking.push(0);
-    for (let col = 0; col < w; col++) {
-      ops.push(Op.FKNIT);
-    }
-  }
-}
+// 4-row repeat:
+//   phase 0, 1: plain knit row (yarn = 1, rack = 0)
+//   phase 2:    transfer FTB at two symmetric columns (yarn = null, rack = 1)
+//   phase 3:    transfer BTF return row             (yarn = null, rack = 0)
+// The FTB/BTF columns walk inward each repeat, giving the chevron.
+const ops = Bimp.empty(w, h, Op.EMPTY).map((_, x, y) => {
+  const s = Math.floor(y / 4) % repeat;
+  const phase = y % 4;
+  if (phase === 2) return x === s || x === w - 1 - s ? Op.FTB : Op.EMPTY;
+  if (phase === 3) return x === s + 1 || x === w - s ? Op.BTF : Op.EMPTY;
+  return Op.FKNIT;
+});
 
 return {
-  ops: new Bimp(w, h, ops),
-  yarnFeeder,
-  racking,
+  ops,
+  yarnFeeder: Array.from({ length: h }, (_, r) => (r % 4 >= 2 ? null : 1)),
+  racking: Array.from({ length: h }, (_, r) => (r % 4 === 2 ? 1 : 0)),
   palette: ["#c8b6e2"],
 };

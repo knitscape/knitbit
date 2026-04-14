@@ -1,16 +1,7 @@
 const w = 10, h = 10;
-const ops = [];
-const yarnFeeder = [];
-
-for (let row = 0; row < h; row++) {
-  yarnFeeder.push(1);
-  for (let col = 0; col < w; col++) {
-    ops.push(Op.FKNIT);
-  }
-}
 
 return {
-  ops: new Bimp(w, h, ops),
-  yarnFeeder,
+  ops: Bimp.empty(w, h, Op.FKNIT),
+  yarnFeeder: new Array(h).fill(1),
   palette: ["#a8dadc"],
 };

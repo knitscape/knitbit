@@ -1,16 +1,10 @@
 const w = 10, h = 10;
-const ops = [];
-const yarnFeeder = [];
 
-for (let row = 0; row < h; row++) {
-  yarnFeeder.push(1);
-  for (let col = 0; col < w; col++) {
-    ops.push(col % 2 === 0 ? Op.FKNIT : Op.BKNIT);
-  }
-}
+// Tile a 2×1 "knit-purl" unit across the whole chart.
+const unit = new Bimp(2, 1, [Op.FKNIT, Op.BKNIT]);
 
 return {
-  ops: new Bimp(w, h, ops),
-  yarnFeeder,
+  ops: Bimp.fromTile(w, h, unit),
+  yarnFeeder: new Array(h).fill(1),
   palette: ["#08ccab"],
 };
