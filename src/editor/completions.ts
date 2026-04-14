@@ -51,7 +51,7 @@ const TOP_LEVEL = [
   { label: "Op", type: "enum", info: "Knitting operation enum" },
 ];
 
-export function knitscapeCompletions(
+export function knitbitCompletions(
   context: CompletionContext
 ): CompletionResult | null {
   const opDot = context.matchBefore(/Op\.\w*/);

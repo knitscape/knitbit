@@ -2,7 +2,7 @@ import { EditorView } from "@codemirror/view";
 import { HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 
-export const knitscapeTheme = EditorView.theme(
+export const knitbitTheme = EditorView.theme(
   {
     "&": {
       backgroundColor: "var(--base0)",
@@ -86,7 +86,7 @@ export const knitscapeTheme = EditorView.theme(
   { dark: true }
 );
 
-export const knitscapeHighlightStyle = HighlightStyle.define([
+export const knitbitHighlightStyle = HighlightStyle.define([
   { tag: tags.keyword, color: "hsl(316, 29%, 64%)" },
   { tag: tags.controlKeyword, color: "hsl(316, 29%, 64%)" },
   { tag: tags.string, color: "#a8dadc" },

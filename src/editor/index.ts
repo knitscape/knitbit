@@ -25,8 +25,8 @@ import {
   highlightSelectionMatches,
 } from "@codemirror/search";
 
-import { knitscapeTheme, knitscapeHighlightStyle } from "./theme";
-import { knitscapeCompletions } from "./completions";
+import { knitbitTheme, knitbitHighlightStyle } from "./theme";
+import { knitbitCompletions } from "./completions";
 import {
   bimpEditExtension,
   bimpFoldService,
@@ -60,9 +60,9 @@ export function createEditor(
         closeBrackets(),
         highlightSelectionMatches(),
         javascript(),
-        autocompletion({ override: [knitscapeCompletions] }),
-        syntaxHighlighting(knitscapeHighlightStyle),
-        knitscapeTheme,
+        autocompletion({ override: [knitbitCompletions] }),
+        syntaxHighlighting(knitbitHighlightStyle),
+        knitbitTheme,
         codeFolding(),
         foldGutter(),
         bimpFoldService,

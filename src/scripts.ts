@@ -7,8 +7,8 @@ export type LastOpened =
   | { type: "saved"; name: string }
   | { type: "example"; name: string };
 
-const SCRIPTS_KEY = "knitscape:scripts";
-const LAST_OPENED_KEY = "knitscape:lastOpened";
+const SCRIPTS_KEY = "knitbit:scripts";
+const LAST_OPENED_KEY = "knitbit:lastOpened";
 
 function readJSON<T>(key: string): T | null {
   try {
