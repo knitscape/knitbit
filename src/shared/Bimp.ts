@@ -21,13 +21,13 @@ export class Bimp {
   width: number;
   height: number;
   pixels: Uint8ClampedArray;
-  palette?: string[];
+  palette?: (string | { color: string; label?: string })[];
 
   constructor(
     width: number,
     height: number,
     pixels: ArrayLike<number>,
-    palette?: string[]
+    palette?: (string | { color: string; label?: string })[]
   ) {
     this.width = width;
     this.height = height;

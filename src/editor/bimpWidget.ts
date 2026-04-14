@@ -15,6 +15,11 @@ import { syntaxTree, foldService, foldEffect } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import type { EditorState } from "@codemirror/state";
 
+export interface PaletteEntry {
+  color: string;
+  label: string;
+}
+
 export interface BimpEditTarget {
   exprFrom: number;
   exprTo: number;
@@ -23,7 +28,7 @@ export interface BimpEditTarget {
   width: number;
   height: number;
   pixels: number[];
-  palette?: string[];
+  palette?: PaletteEntry[];
 }
 
 export type OnEditBimp = (target: BimpEditTarget) => void;
@@ -56,6 +61,33 @@ function parseStringLiteral(node: SyntaxNode, state: EditorState): string | null
   return raw.slice(1, -1);
 }
 
+// Accept either a bare string (legacy "#rgb" hex) or an object literal
+// like { color: "#rgb", label: "main" }. We pull the two fields out with
+// a lightweight regex on the source text so we don't have to mirror the
+// full object-literal AST here.
+function parsePaletteEntry(
+  node: SyntaxNode,
+  state: EditorState
+): PaletteEntry | null {
+  if (node.name === "String") {
+    const color = parseStringLiteral(node, state);
+    return color === null ? null : { color, label: "" };
+  }
+  if (node.name !== "ObjectExpression") return null;
+  const text = state.doc.sliceString(node.from, node.to);
+  const colorMatch = text.match(
+    /\bcolor\s*:\s*(?:"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)')/
+  );
+  const labelMatch = text.match(
+    /\blabel\s*:\s*(?:"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)')/
+  );
+  if (!colorMatch) return null;
+  return {
+    color: colorMatch[1] ?? colorMatch[2] ?? "",
+    label: labelMatch ? (labelMatch[1] ?? labelMatch[2] ?? "") : "",
+  };
+}
+
 function parseBimpNew(node: SyntaxNode, state: EditorState): BimpEditTarget | null {
   const nameNode = node.getChild("VariableName");
   if (!nameNode) return null;
@@ -83,17 +115,17 @@ function parseBimpNew(node: SyntaxNode, state: EditorState): BimpEditTarget | nu
   }
   if (pixels.length !== width * height) return null;
 
-  let palette: string[] | undefined;
+  let palette: PaletteEntry[] | undefined;
   if (args.length === 4) {
     if (args[3].name !== "ArrayExpression") return null;
-    const colorNodes = expressionChildren(args[3]);
-    const colors: string[] = [];
-    for (const cn of colorNodes) {
-      const s = parseStringLiteral(cn, state);
-      if (s === null) return null;
-      colors.push(s);
+    const entryNodes = expressionChildren(args[3]);
+    const entries: PaletteEntry[] = [];
+    for (const en of entryNodes) {
+      const entry = parsePaletteEntry(en, state);
+      if (entry === null) return null;
+      entries.push(entry);
     }
-    palette = colors;
+    palette = entries;
   }
 
   return {

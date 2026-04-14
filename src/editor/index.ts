@@ -34,7 +34,8 @@ import {
   type OnEditBimp,
 } from "./bimpWidget";
 
-export type { BimpEditTarget, OnEditBimp } from "./bimpWidget";
+export type { BimpEditTarget, OnEditBimp, PaletteEntry } from "./bimpWidget";
+import type { PaletteEntry } from "./bimpWidget";
 
 let editorView: EditorView | null = null;
 
@@ -123,11 +124,18 @@ export function setEditorCode(code: string): void {
   }
 }
 
+function formatPaletteEntry(entry: PaletteEntry): string {
+  // If no label, keep the compact legacy form so round-tripping a
+  // palette without labels doesn't bloat the source.
+  if (!entry.label) return JSON.stringify(entry.color);
+  return `{ color: ${JSON.stringify(entry.color)}, label: ${JSON.stringify(entry.label)} }`;
+}
+
 export function formatBimpExpression(
   width: number,
   height: number,
   pixels: number[],
-  palette?: string[]
+  palette?: PaletteEntry[]
 ): string {
   const parts = [
     String(width),
@@ -135,7 +143,7 @@ export function formatBimpExpression(
     `[${pixels.join(", ")}]`,
   ];
   if (palette && palette.length > 0) {
-    parts.push(`[${palette.map((c) => JSON.stringify(c)).join(", ")}]`);
+    parts.push(`[${palette.map(formatPaletteEntry).join(", ")}]`);
   }
   return `new Bimp(${parts.join(", ")})`;
 }
@@ -146,7 +154,7 @@ export function replaceBimpExpression(
   width: number,
   height: number,
   pixels: number[],
-  palette?: string[]
+  palette?: PaletteEntry[]
 ): void {
   if (!editorView) return;
   editorView.dispatch({

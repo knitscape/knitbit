@@ -1,7 +1,7 @@
 import { html } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { EXAMPLES } from "./examples";
-import { createEditor, type BimpEditTarget } from "./editor";
+import { createEditor, type BimpEditTarget, type PaletteEntry } from "./editor";
 import type { LayoutMode } from "./simulation/types";
 import { SYMBOL_DATA } from "./shared/opData";
 import { Bimp } from "./shared/Bimp";
@@ -21,7 +21,7 @@ export interface BimpEditState {
   width: number;
   height: number;
   pixels: number[];
-  palette?: string[];
+  palette?: PaletteEntry[];
   brushValue: number;
   activeTool: BimpTool;
   dragFrom: [number, number] | null;
@@ -77,6 +77,7 @@ export interface ViewHandlers {
   onBimpResize: (width: number, height: number) => void;
   onBimpZoom: (delta: number) => void;
   onBimpPaletteColorChange: (index: number, color: string) => void;
+  onBimpPaletteLabelChange: (index: number, label: string) => void;
   onBimpPaletteAdd: () => void;
   onToggleAutoRun: () => void;
   onDocChange: () => void;
@@ -104,8 +105,9 @@ const FALLBACK_COLORS: string[] = [
   "#1d3557",
 ];
 
-function colorFor(value: number, palette?: string[]): string {
-  if (palette && value >= 0 && value < palette.length) return palette[value];
+function colorFor(value: number, palette?: PaletteEntry[]): string {
+  if (palette && value >= 0 && value < palette.length)
+    return palette[value].color;
   return FALLBACK_COLORS[Math.max(0, value) % FALLBACK_COLORS.length];
 }
 
@@ -620,33 +622,55 @@ function bimpEditorPane(edit: BimpEditState, handlers: ViewHandlers) {
               ${brushValues.map((v) => {
                 const bg = colorFor(v, palette);
                 const isInPalette = !!palette && v < palette.length;
-                return html`<div class="relative">
-                  <button
-                    class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.72rem] font-mono rounded-[3px] cursor-pointer ${brushValue ===
-                    v
-                      ? "outline outline-2 outline-[var(--accent)] outline-offset-1"
-                      : "outline outline-1 outline-[color:var(--base4)]"}"
-                    style="background: ${bg}; color: ${pickTextColor(bg)}"
-                    title=${isInPalette ? `${v} \u2014 ${palette![v]}` : `${v}`}
-                    @click=${() => handlers.onBimpBrushSelect(v)}>
-                    ${v}
-                  </button>
-                  ${isInPalette
-                    ? html`<label
-                        class="absolute -bottom-[3px] -right-[3px] w-[0.9rem] h-[0.9rem] flex items-center justify-center rounded-full bg-[var(--base1)] border border-[color:var(--base4)] text-[0.55rem] text-[color:var(--base10)] cursor-pointer hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] [transition:background_80ms,color_80ms,border-color_80ms]"
-                        title="Edit color ${v}"
-                        @click=${(e: MouseEvent) => e.stopPropagation()}>
-                        <i class="fa-solid fa-pencil"></i>
-                        <input
-                          type="color"
-                          .value=${palette![v]}
-                          @input=${(e: Event) =>
-                            handlers.onBimpPaletteColorChange(
-                              v,
-                              (e.target as HTMLInputElement).value
-                            )}
-                          class="sr-only" />
-                      </label>`
+                const entry = isInPalette ? palette![v] : null;
+                return html`<div class="flex items-center gap-2">
+                  <div class="relative shrink-0">
+                    <button
+                      class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.72rem] font-mono rounded-[3px] cursor-pointer ${brushValue ===
+                      v
+                        ? "outline outline-2 outline-[var(--accent)] outline-offset-1"
+                        : "outline outline-1 outline-[color:var(--base4)]"}"
+                      style="background: ${bg}; color: ${pickTextColor(bg)}"
+                      title=${entry
+                        ? `${v} \u2014 ${entry.label || entry.color}`
+                        : `${v}`}
+                      @click=${() => handlers.onBimpBrushSelect(v)}>
+                      ${v}
+                    </button>
+                    ${entry
+                      ? html`<label
+                          class="absolute -bottom-[3px] -right-[3px] w-[0.9rem] h-[0.9rem] flex items-center justify-center rounded-full bg-[var(--base1)] border border-[color:var(--base4)] text-[0.55rem] text-[color:var(--base10)] cursor-pointer hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] [transition:background_80ms,color_80ms,border-color_80ms]"
+                          title="Edit color ${v}"
+                          @click=${(e: MouseEvent) => e.stopPropagation()}>
+                          <i class="fa-solid fa-pencil"></i>
+                          <input
+                            type="color"
+                            .value=${entry.color}
+                            @input=${(e: Event) =>
+                              handlers.onBimpPaletteColorChange(
+                                v,
+                                (e.target as HTMLInputElement).value
+                              )}
+                            class="sr-only" />
+                        </label>`
+                      : ""}
+                  </div>
+                  ${entry
+                    ? html`<input
+                        type="text"
+                        .value=${entry.label}
+                        placeholder="label"
+                        spellcheck="false"
+                        @change=${(e: Event) =>
+                          handlers.onBimpPaletteLabelChange(
+                            v,
+                            (e.target as HTMLInputElement).value
+                          )}
+                        @keydown=${(e: KeyboardEvent) => {
+                          if (e.key === "Enter")
+                            (e.target as HTMLInputElement).blur();
+                        }}
+                        class="w-[7rem] bg-transparent border border-transparent hover:border-[color:var(--base4)] focus:border-[color:var(--base5)] focus:bg-[var(--base2)] focus:outline-none rounded-[3px] py-[0.1rem] px-[0.3rem] text-[0.74rem] text-[color:var(--base12)]" />`
                     : ""}
                 </div>`;
               })}
@@ -974,6 +998,14 @@ function helpModal(handlers: ViewHandlers) {
             <p class="mt-2 text-[color:var(--base10)]">
               <code class="font-mono text-[color:var(--base13)]">Op</code> —
               the enum above.
+            </p>
+            <p class="mt-2 text-[color:var(--base10)]">
+              The optional 4th arg to <code class="font-mono">new Bimp</code>
+              is a palette for the bitmap editor. Each entry may be either
+              a bare hex string (<code class="font-mono">"#f00"</code>) or
+              an object
+              <code class="font-mono">{ color: "#f00", label: "main" }</code>
+              — the label is shown and editable next to each swatch.
             </p>
           </section>
         </div>

@@ -541,16 +541,27 @@ const handlers: ViewHandlers = {
     const cur = state.editingBimp;
     const palette = (cur.palette ?? []).slice();
     if (index < 0 || index >= palette.length) return;
-    if (palette[index] === color) return;
-    palette[index] = color;
+    if (palette[index].color === color) return;
+    palette[index] = { ...palette[index], color };
     setState({ editingBimp: { ...cur, palette } });
     if (state.autoRun) runCurrentScript();
+  },
+  onBimpPaletteLabelChange: (index: number, label: string) => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    const palette = (cur.palette ?? []).slice();
+    if (index < 0 || index >= palette.length) return;
+    if (palette[index].label === label) return;
+    palette[index] = { ...palette[index], label };
+    setState({ editingBimp: { ...cur, palette } });
+    // Label changes don't affect the runtime program (they're metadata
+    // for the editor only), but we still auto-save so the source updates.
   },
   onBimpPaletteAdd: () => {
     if (!state.editingBimp) return;
     const cur = state.editingBimp;
     const palette = (cur.palette ?? []).slice();
-    palette.push("#888888");
+    palette.push({ color: "#888888", label: "" });
     setState({ editingBimp: { ...cur, palette } });
     if (state.autoRun) runCurrentScript();
   },

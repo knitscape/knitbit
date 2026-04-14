@@ -2,14 +2,26 @@
 // 1 = FKNIT (front knit "V"), 3 = BKNIT (back knit "purl").
 // The 4th arg to Bimp is a color palette for the bitmap editor.
 // Click the ✎ button next to the literal to paint it visually.
-const tile = new Bimp(4, 4, [
-  1, 1, 3, 3,
-  1, 1, 3, 3,
-  3, 3, 1, 1,
-  3, 3, 1, 1,
-], ["#fbacda", "#08ccab", "#eb4034", "#079e85"]);
+const tile = new Bimp(
+  4,
+  4,
+  [1, 1, 3, 3, 1, 1, 3, 3, 3, 3, 1, 1, 3, 3, 1, 1],
+  [
+    { color: "#fbacda", label: "miss" },
+    { color: "#08ccab", label: "front knit" },
+    { color: "#eb4034", label: "front tuck" },
+    { color: "#079e85", label: "back knit" },
+    { color: "#b03027", label: "back tuck" },
+    { color: "#fcff46", label: "ftb xfer" },
+    { color: "#afff46", label: "btf xfer" },
+    { color: "#d48cff", label: "front drop" },
+    { color: "#8050c0", label: "back drop" },
+    { color: "#1a1a1a", label: "empty" },
+  ],
+);
 
-const w = 20, h = 20;
+const w = 20,
+  h = 20;
 const ops = Bimp.fromTile(w, h, tile);
 
 const yarnFeeder = new Array(h).fill(1);
