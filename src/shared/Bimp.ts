@@ -51,7 +51,7 @@ export class Bimp {
         tiled.push(tile.pixel(x % tile.width, y % tile.height));
       }
     }
-    return new Bimp(width, height, tiled);
+    return new Bimp(width, height, tiled, tile.palette);
   }
 
   overlay(overlayBimp: Bimp, pos: Vec2, skip?: number, avoid?: number): Bimp {
