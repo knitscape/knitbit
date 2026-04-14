@@ -222,6 +222,89 @@ return {
 };`;
 }
 
+function singleTuck(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+
+// One isolated tuck in the middle of a stockinette field.
+const tuckCol = Math.floor(w / 2);
+const tuckRow = Math.floor(h / 2);
+
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  yarnFeeder.push(1);
+
+  for (let col = 0; col < w; col++) {
+    ops.push(row === tuckRow && col === tuckCol ? Op.FTUCK : Op.FKNIT);
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  palette: ["#a8dadc"],
+};`;
+}
+
+function tuckColumn(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+
+// One column with a tuck every 4 rows, rest is stockinette.
+const tuckCol = Math.floor(w / 2);
+
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  yarnFeeder.push(1);
+
+  for (let col = 0; col < w; col++) {
+    const isTuckRow = row % 4 === 2;
+    ops.push(isTuckRow && col === tuckCol ? Op.FTUCK : Op.FKNIT);
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  palette: ["#f4a261"],
+};`;
+}
+
+function scatteredTucks(w: number, h: number): string {
+  return `const w = ${w}, h = ${h};
+const ops = [];
+const yarnFeeder = [];
+const direction = [];
+
+// Scattered isolated tucks on a diagonal grid — each tuck sits alone
+// in its column with plenty of plain knit rows around it.
+for (let row = 0; row < h; row++) {
+  direction.push(row % 2 === 0 ? "right" : "left");
+  yarnFeeder.push(1);
+
+  for (let col = 0; col < w; col++) {
+    // Tuck when (col + row/4) lands on a multiple of 3, but only
+    // every 4th row so tucks are isolated vertically.
+    const isTuckRow = row % 4 === 1;
+    const isTuckCol = (col + Math.floor(row / 4)) % 3 === 0;
+    ops.push(isTuckRow && isTuckCol ? Op.FTUCK : Op.FKNIT);
+  }
+}
+
+return {
+  ops: new Bimp(w, h, new Uint8ClampedArray(ops)),
+  yarnFeeder,
+  direction,
+  palette: ["#c8b6e2"],
+};`;
+}
+
 function floatJacquard(w: number, h: number): string {
   return `const w = ${w}, h = ${h};
 const ops = [];
@@ -345,6 +428,21 @@ export const EXAMPLES: Example[] = [
     name: "Chevron Lace 12\u00d720",
     description: "Lace with eyelets forming a V/chevron pattern",
     code: chevronLace(12, 20),
+  },
+  {
+    name: "Single Tuck 10\u00d710",
+    description: "One isolated tuck in a field of stockinette",
+    code: singleTuck(10, 10),
+  },
+  {
+    name: "Tuck Column 10\u00d716",
+    description: "A single column with a tuck every 4 rows",
+    code: tuckColumn(10, 16),
+  },
+  {
+    name: "Scattered Tucks 12\u00d716",
+    description: "Isolated tucks spaced out on a diagonal grid",
+    code: scatteredTucks(12, 16),
   },
   {
     name: "Float Jacquard 10\u00d716",
