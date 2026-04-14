@@ -463,7 +463,8 @@ function init(yarnData: any, canvas: HTMLCanvasElement, resetCamera = true) {
   }
 
   lastBbox = bbox3d(yarnData[0].pts);
-  if (resetCamera) camera.fit(lastBbox);
+  if (resetCamera)
+    camera.fit(lastBbox, canvas.clientWidth / canvas.clientHeight);
   computeLightMatrices(lastBbox);
 
   yarns = [];
@@ -581,7 +582,10 @@ function updateYarnGeometry(yarnData: any) {
 }
 
 function fitCamera() {
-  if (camera && lastBbox) camera.fit(lastBbox);
+  if (camera && lastBbox) {
+    const canvas = gl.canvas as HTMLCanvasElement;
+    camera.fit(lastBbox, canvas.clientWidth / canvas.clientHeight);
+  }
 }
 
 export const noodleRenderer = {

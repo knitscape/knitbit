@@ -37,11 +37,16 @@ export function createCamera3D() {
     return projMatrix;
   }
 
-  function fit(bbox: BBox3D): void {
+  function fit(bbox: BBox3D, aspect: number = 1): void {
     target = [...bbox.center];
-    radius = Math.max(...bbox.dimensions) * 2;
-    azimuth = 0.5;
-    polar = Math.PI / 4;
+    azimuth = 0;
+    polar = Math.PI / 2;
+    const [w, h, d] = bbox.dimensions;
+    const vTan = Math.tan(FOV / 2);
+    const hTan = vTan * aspect;
+    const radiusV = h / 2 / vTan;
+    const radiusH = w / 2 / hTan;
+    radius = Math.max(radiusV, radiusH) * 1.1 + d / 2;
     update();
   }
 
