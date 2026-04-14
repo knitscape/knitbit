@@ -131,7 +131,29 @@ export function generateTopology(
       // ── MISS / EMPTY: no needle action at this cell ──────────────────
       // MISS = yarn floats past; EMPTY = nothing happens at all (used in
       // transfer rows where most cells aren't transferring).
-      if (op === Op.MISS || op === Op.EMPTY) continue;
+      // In a non-transfer row the fabric still grows one row around this
+      // needle, so any loop currently held here should stretch up to the
+      // new row level. We mutate existing head nodes (and the lastHead
+      // tracker) so the NEXT knit on this needle has its legs right at
+      // the lifted heads — instead of reaching down across many rows.
+      if (op === Op.MISS || op === Op.EMPTY) {
+        if (yarn != null) {
+          const liftTarget = mode === "compressed" ? effectiveRow : row + 1;
+          for (const bed of ["front", "back"] as const) {
+            const heads = currentHeads[bed][n];
+            if (heads.length === 0) continue;
+            for (const idx of heads) {
+              if (nodes[idx].gridJ < liftTarget) {
+                nodes[idx].gridJ = liftTarget;
+              }
+            }
+            if (lastHead[bed][n].j < liftTarget) {
+              lastHead[bed][n].j = liftTarget;
+            }
+          }
+        }
+        continue;
+      }
 
       // ── Drops: remove the loop head from the specified bed ──────────
       if (op === Op.FDROP) {

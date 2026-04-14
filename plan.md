@@ -4,11 +4,6 @@
 
 - pointelle holes are creating leg nodes when they shouldn't
 
-## program
-
-- need explicit miss and non-explicit miss
-- need "empty" yarn to signify transfer rows
-
 ## simulation/rendering
 
 - figure out whatever is going on with the renderer
