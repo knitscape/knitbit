@@ -23,6 +23,6 @@ const unit = new Bimp(
 
 return {
   ops: unit,
-  yarnFeeder: new Array(h).fill(1),
-  palette: ["#7245b5"],
+  yarnFeeder: new Array(unit.height).fill(1),
+  palette: ["#b59fd5"],
 };
