@@ -6,7 +6,12 @@ import {
   layoutNodes,
 } from "./layout";
 import { generateTopology } from "./topology";
-import type { KnittingProgram, LayoutMode } from "./types";
+import {
+  DEFAULT_RELAX_SETTINGS,
+  type KnittingProgram,
+  type LayoutMode,
+  type RelaxSettings,
+} from "./types";
 
 import { noodleRenderer } from "./renderer";
 
@@ -22,6 +27,7 @@ export interface SimulateOptions {
   resetCamera?: boolean;
   layoutMode?: LayoutMode;
   maxStitch?: number;
+  relaxSettings?: RelaxSettings;
 }
 
 export function simulate(program: KnittingProgram, options: SimulateOptions) {
@@ -35,6 +41,8 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
 
   const canvas = options.canvas;
   const layoutMode: LayoutMode = options.layoutMode ?? "technical";
+  const relaxSettings: RelaxSettings =
+    options.relaxSettings ?? { ...DEFAULT_RELAX_SETTINGS };
   let relaxed = false;
   let sim: ReturnType<typeof yarnRelaxation> | undefined;
   let lastTickMs = 0;
@@ -90,7 +98,13 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
 
   function relax() {
     if (relaxed) return;
-    sim = yarnRelaxation();
+    sim = yarnRelaxation(relaxSettings);
+    relaxed = true;
+  }
+
+  function restart() {
+    if (sim) sim.stop();
+    sim = yarnRelaxation(relaxSettings);
     relaxed = true;
   }
 
@@ -112,12 +126,14 @@ export function simulate(program: KnittingProgram, options: SimulateOptions) {
 
   return {
     relax,
+    restart,
     stopSim,
     draw,
     isRelaxing,
     setMaxStitch,
     topologyMs,
     getTickMs: () => lastTickMs,
+    getAlpha: () => sim?.alpha() ?? 1,
     fitCamera: () => renderer.fitCamera(),
   };
 }

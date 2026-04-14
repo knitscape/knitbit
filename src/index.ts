@@ -31,7 +31,11 @@ import {
   type BimpEditTarget,
 } from "./editor";
 import { EXAMPLES } from "./examples";
-import type { KnittingProgram } from "./simulation/types";
+import {
+  DEFAULT_RELAX_SETTINGS,
+  type KnittingProgram,
+  type RelaxSettings,
+} from "./simulation/types";
 
 const MIN_CELL = 6;
 const MAX_CELL = 80;
@@ -54,17 +58,23 @@ let state: AppState = {
   autoRun: true,
   scriptId: { type: "example", name: EXAMPLES[0].name },
   savedScripts: loadAllScripts(),
+  relaxSettings: { ...DEFAULT_RELAX_SETTINGS },
+  simShowSettings: false,
+  simAlpha: 1,
 };
 
-// Last successful program — kept so we can re-render on zoom/mode changes
 let lastProgram: KnittingProgram | null = null;
+
+const liveRelaxSettings: RelaxSettings = { ...DEFAULT_RELAX_SETTINGS };
 
 // Simulation handles
 let simDraw: (() => void) | undefined;
 let simStop: (() => void) | undefined;
 let simRelax: (() => void) | undefined;
+let simRestart: (() => void) | undefined;
 let simIsRelaxing: (() => boolean) | undefined;
 let simGetTickMs: (() => number) | undefined;
+let simGetAlpha: (() => number) | undefined;
 let simFitCamera: (() => void) | undefined;
 let simSetMaxStitch: ((n: number) => void) | undefined;
 
@@ -199,8 +209,10 @@ function initSimulation(resetCamera = true) {
     simStop = undefined;
     simDraw = undefined;
     simRelax = undefined;
+    simRestart = undefined;
     simIsRelaxing = undefined;
     simGetTickMs = undefined;
+    simGetAlpha = undefined;
     simSetMaxStitch = undefined;
   }
 
@@ -215,13 +227,16 @@ function initSimulation(resetCamera = true) {
     resetCamera,
     layoutMode: state.layoutMode,
     maxStitch: state.maxStitch,
+    relaxSettings: liveRelaxSettings,
   });
 
   simDraw = result.draw;
   simStop = result.stopSim;
   simRelax = result.relax;
+  simRestart = result.restart;
   simIsRelaxing = result.isRelaxing;
   simGetTickMs = result.getTickMs;
+  simGetAlpha = result.getAlpha;
   simFitCamera = result.fitCamera;
   simSetMaxStitch = result.setMaxStitch;
   setState({ simState: "idle", topologyMs: result.topologyMs, tickMs: 0 });
@@ -638,6 +653,26 @@ const handlers: ViewHandlers = {
     const filename = `${baseName || "script"}.js`;
     triggerDownload(code, filename, "application/javascript");
   },
+  onToggleSimSettings: () =>
+    setState({ simShowSettings: !state.simShowSettings }),
+  onRelaxSettingChange: (key, value) => {
+    (liveRelaxSettings[key] as number) = value as number;
+    setState({ relaxSettings: { ...liveRelaxSettings } });
+
+    
+    if (simRestart) {
+      simRestart();
+      setState({ simState: "relaxing" });
+    }
+  },
+  onResetRelaxSettings: () => {
+    Object.assign(liveRelaxSettings, DEFAULT_RELAX_SETTINGS);
+    setState({ relaxSettings: { ...liveRelaxSettings } });
+    if (simRestart) {
+      simRestart();
+      setState({ simState: "relaxing" });
+    }
+  },
 };
 
 function loop() {
@@ -650,9 +685,10 @@ function loop() {
 
   // Update tick timing and detect when relaxation finishes
   if (state.simState === "relaxing") {
-    if (simGetTickMs) {
-      setState({ tickMs: simGetTickMs() });
-    }
+    const patch: Partial<AppState> = {};
+    if (simGetTickMs) patch.tickMs = simGetTickMs();
+    if (simGetAlpha) patch.simAlpha = simGetAlpha();
+    if (Object.keys(patch).length) setState(patch);
     if (simIsRelaxing && !simIsRelaxing()) {
       setState({ simState: "relaxed" });
     }

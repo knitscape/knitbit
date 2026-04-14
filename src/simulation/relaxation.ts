@@ -1,19 +1,10 @@
 import { Vec3 } from "../math/Vec3";
-import type { NodeType, ResolvedSegment } from "./types";
+import type { NodeType, ResolvedSegment, RelaxSettings } from "./types";
 
-export function yarnRelaxation(
-  kYarn = 0.4,
-  tYarn = 0.01,
-  alphaMin = 0.001,
-  alphaTarget = 0,
-  iterations = 4,
-  velocityDecay = 0.5
-) {
+export function yarnRelaxation(settings: RelaxSettings) {
+  // ALPHA_DECAY is recomputed from alphaMin so that when alphaMin changes
+  // mid-run the decay schedule scales sensibly.
   let ALPHA = 1;
-  const ALPHA_MIN = alphaMin;
-  const ALPHA_TARGET = alphaTarget;
-  const ALPHA_DECAY = 1 - Math.pow(ALPHA_MIN, 1 / 300);
-
   let running = true;
 
   function applyYarnForce(
@@ -70,7 +61,7 @@ export function yarnRelaxation(
 
     let mag = 0;
     if (!isNaN(omega)) {
-      mag = tYarn * ALPHA * omega;
+      mag = settings.tYarn * ALPHA * omega;
     }
     if (mag === 0) return;
 
@@ -85,8 +76,9 @@ export function yarnRelaxation(
   }
 
   function updatePositions(nodes: NodeType[]): void {
+    const decay = settings.velocityDecay;
     for (const node of nodes) {
-      node.v = Vec3.scale(Vec3.add(node.v, node.f), velocityDecay);
+      node.v = Vec3.scale(Vec3.add(node.v, node.f), decay);
       node.pos = Vec3.add(node.pos, node.v);
       node.f = [0, 0, 0];
     }
@@ -96,8 +88,11 @@ export function yarnRelaxation(
     yarns: Record<string, ResolvedSegment[]>,
     nodes: NodeType[]
   ): void {
+    const { iterations, kYarn, alphaTarget, alphaMin } = settings;
+    const alphaDecay = 1 - Math.pow(Math.max(alphaMin, 1e-9), 1 / 300);
+
     for (let k = 0; k < iterations; ++k) {
-      ALPHA += (ALPHA_TARGET - ALPHA) * ALPHA_DECAY;
+      ALPHA += (alphaTarget - ALPHA) * alphaDecay;
 
       Object.entries(yarns).forEach(
         ([_yarnIndex, segArr]: [string, ResolvedSegment[]]) => {
@@ -113,7 +108,7 @@ export function yarnRelaxation(
       updatePositions(nodes);
     }
 
-    if (ALPHA < ALPHA_MIN) {
+    if (ALPHA < alphaMin) {
       stop();
     }
   }

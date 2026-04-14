@@ -2,7 +2,7 @@ import { html } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { EXAMPLES } from "./examples";
 import { createEditor, type BimpEditTarget, type PaletteEntry } from "./editor";
-import type { LayoutMode } from "./simulation/types";
+import type { LayoutMode, RelaxSettings } from "./simulation/types";
 import { SYMBOL_DATA } from "./shared/opData";
 import { Bimp } from "./shared/Bimp";
 import type { SavedScript } from "./scripts";
@@ -47,6 +47,9 @@ export interface AppState {
   scriptId: ScriptId;
   showScriptPicker: boolean;
   savedScripts: Record<string, SavedScript>;
+  relaxSettings: RelaxSettings;
+  simShowSettings: boolean;
+  simAlpha: number;
 }
 
 export interface ViewHandlers {
@@ -84,6 +87,12 @@ export interface ViewHandlers {
   onDownloadBmp: () => void;
   onDownloadJson: () => void;
   onDownloadScript: () => void;
+  onToggleSimSettings: () => void;
+  onRelaxSettingChange: <K extends keyof RelaxSettings>(
+    key: K,
+    value: RelaxSettings[K]
+  ) => void;
+  onResetRelaxSettings: () => void;
 }
 
 const FALLBACK_COLORS: string[] = [
@@ -385,18 +394,12 @@ export function view(state: AppState, handlers: ViewHandlers) {
                     @click=${handlers.onRelax}>
                     <i class="fa-solid fa-play"></i> Relax
                   </button>`
-                : state.simState === "relaxing"
-                  ? html`<button
-                      class="flex items-center gap-[0.4rem] bg-[var(--base4)] text-[color:var(--base7)] [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-default"
-                      disabled>
-                      Relaxing\u2026
-                    </button>`
-                  : html`<button
-                      class="flex items-center gap-[0.4rem] bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
-                      title="Reset simulation"
-                      @click=${handlers.onReset}>
-                      <i class="fa-solid fa-rotate-left"></i> Reset
-                    </button>`}
+                : html`<button
+                    class="flex items-center gap-[0.4rem] bg-[var(--accent)] text-white [font-variation-settings:'wght'_600] py-[0.2rem] px-[0.6rem] text-[0.75rem] rounded-[3px] border-0 cursor-pointer [transition:filter_80ms] hover:brightness-110"
+                    title="Reset simulation to initial layout"
+                    @click=${handlers.onReset}>
+                    <i class="fa-solid fa-rotate-left"></i> Reset
+                  </button>`}
             </div>
           </div>
           <div class="flex-1 min-h-0 relative">
@@ -407,7 +410,11 @@ export function view(state: AppState, handlers: ViewHandlers) {
               ${state.simState !== "idle"
                 ? html`<span>tick: ${state.tickMs.toFixed(1)}ms</span>`
                 : ""}
+              ${state.simState === "relaxing"
+                ? html`<span>α: ${state.simAlpha.toFixed(3)}</span>`
+                : ""}
             </div>
+            ${simSettingsPanel(state, handlers)}
           </div>
         </div>
     </div>
@@ -415,6 +422,125 @@ export function view(state: AppState, handlers: ViewHandlers) {
     ${state.showHelp ? helpModal(handlers) : ""}
     ${state.showExamplePicker ? examplePickerModal(handlers) : ""}
     ${state.showScriptPicker ? scriptPickerModal(state, handlers) : ""}
+  `;
+}
+
+interface SliderConfig {
+  key: keyof RelaxSettings;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  format: (v: number) => string;
+}
+
+const RELAX_SLIDERS: SliderConfig[] = [
+  {
+    key: "kYarn",
+    label: "yarn stiffness",
+    min: 0,
+    max: 2,
+    step: 0.01,
+    format: (v) => v.toFixed(2),
+  },
+  {
+    key: "tYarn",
+    label: "bending stiffness",
+    min: 0,
+    max: 0.1,
+    step: 0.001,
+    format: (v) => v.toFixed(3),
+  },
+  {
+    key: "iterations",
+    label: "iterations / frame",
+    min: 1,
+    max: 16,
+    step: 1,
+    format: (v) => v.toFixed(0),
+  },
+  {
+    key: "velocityDecay",
+    label: "velocity decay",
+    min: 0,
+    max: 1,
+    step: 0.01,
+    format: (v) => v.toFixed(2),
+  },
+  {
+    key: "alphaMin",
+    label: "stop threshold (α)",
+    min: 0,
+    max: 0.1,
+    step: 0.0005,
+    format: (v) => (v === 0 ? "off" : v.toFixed(4)),
+  },
+];
+
+function simSettingsPanel(state: AppState, handlers: ViewHandlers) {
+  if (!state.simShowSettings) {
+    return html`
+      <button
+        class="absolute top-2 right-2 flex items-center justify-center w-[1.75rem] h-[1.75rem] bg-[var(--base2)]/90 backdrop-blur border border-[color:var(--base4)] text-[0.8rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+        title="Simulation settings"
+        @click=${handlers.onToggleSimSettings}>
+        <i class="fa-solid fa-gear"></i>
+      </button>
+    `;
+  }
+
+  return html`
+    <div
+      class="absolute top-2 right-2 w-[16rem] bg-[var(--base1)]/95 backdrop-blur border border-[color:var(--base3)] rounded-[4px] shadow-xl flex flex-col">
+      <div
+        class="flex items-center justify-between gap-2 py-[0.4rem] px-3 [border-bottom:1px_solid_var(--base3)]">
+        <span
+          class="text-[0.7rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base10)]">
+          Simulation
+        </span>
+        <div class="flex items-center gap-1">
+          <button
+            class="flex items-center justify-center h-[1.4rem] px-[0.4rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.65rem] rounded-[3px] text-[color:var(--base11)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+            title="Reset to defaults"
+            @click=${handlers.onResetRelaxSettings}>
+            reset
+          </button>
+          <button
+            class="flex items-center justify-center w-[1.4rem] h-[1.4rem] bg-[var(--base2)] border border-[color:var(--base4)] text-[0.7rem] rounded-[3px] text-[color:var(--base12)] cursor-pointer [transition:background_80ms] hover:bg-[var(--base4)]"
+            title="Close"
+            @click=${handlers.onToggleSimSettings}>
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+      <div class="flex flex-col gap-[0.55rem] py-3 px-3">
+        ${RELAX_SLIDERS.map((s) => {
+          const value = state.relaxSettings[s.key];
+          return html`
+            <label class="flex flex-col gap-[0.2rem]">
+              <div
+                class="flex items-baseline justify-between text-[0.7rem] text-[color:var(--base11)]">
+                <span>${s.label}</span>
+                <span class="font-mono text-[color:var(--base12)]"
+                  >${s.format(value)}</span
+                >
+              </div>
+              <input
+                type="range"
+                min=${s.min}
+                max=${s.max}
+                step=${s.step}
+                .value=${String(value)}
+                class="w-full accent-[var(--accent)]"
+                @input=${(e: Event) => {
+                  const v = parseFloat((e.target as HTMLInputElement).value);
+                  handlers.onRelaxSettingChange(s.key, v);
+                }} />
+            </label>
+          `;
+        })}
+      </div>
+    </div>
   `;
 }
 
