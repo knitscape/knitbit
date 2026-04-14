@@ -1,5 +1,8 @@
 # Dev plan
 
+- changing the yarn palette doesn't update the yarn color immediately
+- put labels on control columns
+
 ## simulation/rendering
 
 - figure out whatever is going on with the renderer
