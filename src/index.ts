@@ -15,7 +15,7 @@ import { view, type AppState, type ViewHandlers } from "./view";
 import {
   getEditorCode,
   setEditorCode,
-  replaceBimpPixels,
+  replaceBimpExpression,
   type BimpEditTarget,
 } from "./editor";
 import { EXAMPLES } from "./examples";
@@ -34,7 +34,7 @@ let state: AppState = {
   topologyMs: 0,
   tickMs: 0,
   showHelp: false,
-  layoutMode: "technical",
+  layoutMode: "compressed",
   editingBimp: null,
   maxStitch: 0,
   totalStitches: 0,
@@ -81,6 +81,83 @@ function renderChart() {
     lastProgram.palette,
     state.cellSize
   );
+}
+
+// ─── Scrub-cursor highlight ──────────────────────────────────────────────────
+
+/**
+ * Walk the program in carriage order and find the (row, col) of the Nth
+ * knit/tuck operation. Returns null when N is 0 or past the end.
+ */
+function stitchToRowCol(
+  program: KnittingProgram,
+  n: number
+): { row: number; col: number } | null {
+  if (n <= 0) return null;
+  const w = program.width;
+  const h = program.height;
+  let count = 0;
+  for (let row = 0; row < h; row++) {
+    const dir = program.direction[row];
+    for (let i = 0; i < w; i++) {
+      const col = dir === "right" ? i : w - 1 - i;
+      const op = program.ops.pixel(col, row);
+      if (
+        op === Op.FKNIT ||
+        op === Op.FTUCK ||
+        op === Op.BKNIT ||
+        op === Op.BTUCK
+      ) {
+        count++;
+        if (count === n) return { row, col };
+      }
+    }
+  }
+  return null;
+}
+
+function updateScrubHighlight() {
+  const rowEl = document.getElementById("chart-scrub-row");
+  const cellEl = document.getElementById("chart-scrub-cell");
+  if (!rowEl || !cellEl) return;
+
+  if (!lastProgram) {
+    rowEl.classList.add("hidden");
+    cellEl.classList.add("hidden");
+    return;
+  }
+
+  const pos = stitchToRowCol(lastProgram, state.maxStitch);
+  if (!pos) {
+    rowEl.classList.add("hidden");
+    cellEl.classList.add("hidden");
+    return;
+  }
+
+  const opsCanvas = document.getElementById(
+    "chart-canvas"
+  ) as HTMLCanvasElement | null;
+  const chartContent = document.getElementById("chart-content");
+  if (!opsCanvas || !chartContent) return;
+
+  const cs = state.cellSize;
+  const h = lastProgram.height;
+  const rowFromTop = h - 1 - pos.row;
+  const opsRect = opsCanvas.getBoundingClientRect();
+  const contentRect = chartContent.getBoundingClientRect();
+
+  const rowTop = opsRect.top - contentRect.top + rowFromTop * cs;
+  rowEl.style.top = `${rowTop}px`;
+  rowEl.style.height = `${cs}px`;
+  rowEl.classList.remove("hidden");
+
+  // Cell marker lives inside the canvas wrapper, so coords are in
+  // canvas-local pixel space.
+  cellEl.style.top = `${rowFromTop * cs}px`;
+  cellEl.style.left = `${pos.col * cs}px`;
+  cellEl.style.width = `${cs}px`;
+  cellEl.style.height = `${cs}px`;
+  cellEl.classList.remove("hidden");
 }
 
 // ─── Simulation ───────────────────────────────────────────────────────────────
@@ -146,6 +223,7 @@ function runWithCode(code: string) {
     });
 
     renderChart();
+    updateScrubHighlight();
     initSimulation();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -172,11 +250,13 @@ const handlers: ViewHandlers = {
   onZoomIn: () => {
     setState({ cellSize: Math.min(state.cellSize + 4, MAX_CELL) });
     renderChart();
+    updateScrubHighlight();
   },
 
   onZoomOut: () => {
     setState({ cellSize: Math.max(state.cellSize - 4, MIN_CELL) });
     renderChart();
+    updateScrubHighlight();
   },
 
   onSelectExample: selectExample,
@@ -199,12 +279,13 @@ const handlers: ViewHandlers = {
     const clamped = Math.max(0, Math.min(n, state.totalStitches));
     setState({ maxStitch: clamped, simState: "idle" });
     if (simSetMaxStitch) simSetMaxStitch(clamped);
+    updateScrubHighlight();
   },
   onEditBimp: (target: BimpEditTarget) => {
     setState({
       editingBimp: {
-        arrayFrom: target.arrayFrom,
-        arrayTo: target.arrayTo,
+        exprFrom: target.exprFrom,
+        exprTo: target.exprTo,
         width: target.width,
         height: target.height,
         pixels: target.pixels.slice(),
@@ -216,8 +297,9 @@ const handlers: ViewHandlers = {
   onBimpCancel: () => setState({ editingBimp: null }),
   onBimpSave: () => {
     if (!state.editingBimp) return;
-    const { arrayFrom, arrayTo, pixels } = state.editingBimp;
-    replaceBimpPixels(arrayFrom, arrayTo, pixels);
+    const { exprFrom, exprTo, width, height, pixels, palette } =
+      state.editingBimp;
+    replaceBimpExpression(exprFrom, exprTo, width, height, pixels, palette);
     setState({ editingBimp: null });
     runCurrentScript();
   },
@@ -232,6 +314,36 @@ const handlers: ViewHandlers = {
   onBimpBrushSelect: (value: number) => {
     if (!state.editingBimp) return;
     setState({ editingBimp: { ...state.editingBimp, brushValue: value } });
+  },
+  onBimpResize: (newWidth: number, newHeight: number) => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    const w = Math.max(1, Math.min(64, Math.floor(newWidth)));
+    const h = Math.max(1, Math.min(64, Math.floor(newHeight)));
+    if (w === cur.width && h === cur.height) return;
+    const pixels = new Array(w * h).fill(0);
+    for (let y = 0; y < Math.min(h, cur.height); y++) {
+      for (let x = 0; x < Math.min(w, cur.width); x++) {
+        pixels[y * w + x] = cur.pixels[y * cur.width + x];
+      }
+    }
+    setState({ editingBimp: { ...cur, width: w, height: h, pixels } });
+  },
+  onBimpPaletteColorChange: (index: number, color: string) => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    const palette = (cur.palette ?? []).slice();
+    if (index < 0 || index >= palette.length) return;
+    if (palette[index] === color) return;
+    palette[index] = color;
+    setState({ editingBimp: { ...cur, palette } });
+  },
+  onBimpPaletteAdd: () => {
+    if (!state.editingBimp) return;
+    const cur = state.editingBimp;
+    const palette = (cur.palette ?? []).slice();
+    palette.push("#888888");
+    setState({ editingBimp: { ...cur, palette } });
   },
   onDownloadBmp: () => {
     if (!lastProgram) return;
@@ -440,7 +552,10 @@ function init() {
       lastMouse = null;
       hideHover();
     });
-    chartScroll?.addEventListener("scroll", updateHover);
+    chartScroll?.addEventListener("scroll", () => {
+      updateHover();
+      updateScrubHighlight();
+    });
 
     // Ctrl+scroll to zoom on the chart pane
     const chartPane = document.getElementById("chart-pane");
@@ -457,6 +572,7 @@ function init() {
             ),
           });
           renderChart();
+          updateScrubHighlight();
         }
       },
       { passive: false }

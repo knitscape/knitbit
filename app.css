@@ -94,6 +94,17 @@
     inset -1px 0 0 rgba(229, 229, 229, 0.18);
 }
 
+/* ─── Scrub cursor (current stitch marker) ──────────────────────────────── */
+
+.chart-scrub-row {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.chart-scrub-cell {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 /* Suppress the default disclosure triangle on our custom dropdown. */
 .chart-menu > summary {
   list-style: none;

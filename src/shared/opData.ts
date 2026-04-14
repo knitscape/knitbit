@@ -63,14 +63,14 @@ export const SYMBOL_DATA: Record<number, SymbolData> = {
     description: "Back bed tuck",
   },
   [Op.FTB]: {
-    pathdata: "M 0.5 0 L 0.5 1 M 0.3 0.7 L 0.5 1 L 0.7 0.7",
-    path: new Path2D("M 0.5 0 L 0.5 1 M 0.3 0.7 L 0.5 1 L 0.7 0.7"),
+    pathdata: "M 0.5 1 L 0.5 0 M 0.3 0.3 L 0.5 0 L 0.7 0.3",
+    path: new Path2D("M 0.5 1 L 0.5 0 M 0.3 0.3 L 0.5 0 L 0.7 0.3"),
     color: "#fcff46",
     description: "Transfer front to back",
   },
   [Op.BTF]: {
-    pathdata: "M 0.5 1 L 0.5 0 M 0.3 0.3 L 0.5 0 L 0.7 0.3",
-    path: new Path2D("M 0.5 1 L 0.5 0 M 0.3 0.3 L 0.5 0 L 0.7 0.3"),
+    pathdata: "M 0.5 0 L 0.5 1 M 0.3 0.7 L 0.5 1 L 0.7 0.7",
+    path: new Path2D("M 0.5 0 L 0.5 1 M 0.3 0.7 L 0.5 1 L 0.7 0.7"),
     color: "#afff46",
     description: "Transfer back to front",
   },

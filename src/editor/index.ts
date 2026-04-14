@@ -115,17 +115,40 @@ export function setEditorCode(code: string): void {
   }
 }
 
-export function replaceBimpPixels(
-  arrayFrom: number,
-  arrayTo: number,
-  pixels: number[]
+function formatBimpExpression(
+  width: number,
+  height: number,
+  pixels: number[],
+  palette?: string[]
+): string {
+  const parts = [
+    String(width),
+    String(height),
+    `[${pixels.join(", ")}]`,
+  ];
+  if (palette && palette.length > 0) {
+    parts.push(`[${palette.map((c) => JSON.stringify(c)).join(", ")}]`);
+  }
+  return `new Bimp(${parts.join(", ")})`;
+}
+
+export function replaceBimpExpression(
+  exprFrom: number,
+  exprTo: number,
+  width: number,
+  height: number,
+  pixels: number[],
+  palette?: string[]
 ): void {
   if (!editorView) return;
-  // Replace only the content between `[` and `]` so any existing fold range
-  // (which covers the inner span) stays valid after the edit.
-  const innerFrom = arrayFrom + 1;
-  const innerTo = arrayTo - 1;
   editorView.dispatch({
-    changes: { from: innerFrom, to: innerTo, insert: pixels.join(", ") },
+    changes: {
+      from: exprFrom,
+      to: exprTo,
+      insert: formatBimpExpression(width, height, pixels, palette),
+    },
   });
+  if (ensureSyntaxTree(editorView.state, editorView.state.doc.length, 100)) {
+    foldAllBimpPixels(editorView);
+  }
 }

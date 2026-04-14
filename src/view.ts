@@ -8,8 +8,8 @@ import { SYMBOL_DATA } from "./shared/opData";
 export type SimState = "idle" | "relaxing" | "relaxed";
 
 export interface BimpEditState {
-  arrayFrom: number;
-  arrayTo: number;
+  exprFrom: number;
+  exprTo: number;
   width: number;
   height: number;
   pixels: number[];
@@ -50,6 +50,9 @@ export interface ViewHandlers {
   onBimpSave: () => void;
   onBimpCellPaint: (index: number) => void;
   onBimpBrushSelect: (value: number) => void;
+  onBimpResize: (width: number, height: number) => void;
+  onBimpPaletteColorChange: (index: number, color: string) => void;
+  onBimpPaletteAdd: () => void;
   onDownloadBmp: () => void;
   onDownloadJson: () => void;
 }
@@ -151,12 +154,18 @@ export function view(state: AppState, handlers: ViewHandlers) {
                     <div
                       id="chart-col-highlight"
                       class="chart-col-highlight pointer-events-none absolute hidden"></div>
+                    <div
+                      id="chart-scrub-cell"
+                      class="chart-scrub-cell pointer-events-none absolute hidden"></div>
                   </div>
                 </div>
               </div>
               <div
                 id="chart-row-highlight"
                 class="chart-row-highlight pointer-events-none absolute left-0 right-0 hidden"></div>
+              <div
+                id="chart-scrub-row"
+                class="chart-scrub-row pointer-events-none absolute left-0 right-0 hidden"></div>
             </div>
             <div
               class="shrink-0 flex items-center justify-between gap-2 py-[0.3rem] px-3 bg-[var(--base1)] [border-top:1px_solid_var(--base3)]">
@@ -382,27 +391,77 @@ function bimpModal(edit: BimpEditState, handlers: ViewHandlers) {
         </div>
 
         <div class="px-5 py-4 flex flex-col gap-4">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span
+              class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)]">
+              Size
+            </span>
+            <div class="flex items-center gap-[0.3rem]">
+              <input
+                type="number"
+                min="1"
+                max="64"
+                step="1"
+                .value=${String(width)}
+                @change=${(e: Event) => {
+                  const v = parseInt((e.target as HTMLInputElement).value, 10);
+                  if (Number.isFinite(v)) handlers.onBimpResize(v, height);
+                }}
+                class="w-[3.5rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] py-[0.15rem] px-[0.35rem] text-[0.78rem] font-mono text-[color:var(--base12)] text-right" />
+              <span class="text-[color:var(--base7)] text-[0.78rem]">\u00D7</span>
+              <input
+                type="number"
+                min="1"
+                max="64"
+                step="1"
+                .value=${String(height)}
+                @change=${(e: Event) => {
+                  const v = parseInt((e.target as HTMLInputElement).value, 10);
+                  if (Number.isFinite(v)) handlers.onBimpResize(width, v);
+                }}
+                class="w-[3.5rem] bg-[var(--base2)] border border-[color:var(--base4)] rounded-[3px] py-[0.15rem] px-[0.35rem] text-[0.78rem] font-mono text-[color:var(--base12)] text-right" />
+            </div>
+          </div>
+
           <div class="flex items-center gap-2 flex-wrap">
             <span
               class="text-[0.72rem] [font-variation-settings:'wght'_600] tracking-[0.08em] uppercase text-[color:var(--base7)] mr-1">
-              Brush
+              ${palette ? "Palette" : "Brush"}
             </span>
-            ${brushValues.map(
-              (v) => html`<button
-                class="flex items-center justify-center w-[1.8rem] h-[1.8rem] text-[0.72rem] font-mono rounded-[3px] cursor-pointer ${brushValue ===
-                v
-                  ? "outline outline-2 outline-[var(--accent)] outline-offset-1"
-                  : "outline outline-1 outline-[color:var(--base4)]"}"
-                style="background: ${colorFor(v, palette)}; color: ${pickTextColor(
-                  colorFor(v, palette)
-                )}"
-                title=${palette && v < palette.length
-                  ? `${v} \u2014 ${palette[v]}`
-                  : `${v}`}
-                @click=${() => handlers.onBimpBrushSelect(v)}>
-                ${v}
-              </button>`
-            )}
+            ${brushValues.map((v) => {
+              const bg = colorFor(v, palette);
+              const isInPalette = !!palette && v < palette.length;
+              return html`<div class="relative">
+                <button
+                  class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.72rem] font-mono rounded-[3px] cursor-pointer ${brushValue ===
+                  v
+                    ? "outline outline-2 outline-[var(--accent)] outline-offset-1"
+                    : "outline outline-1 outline-[color:var(--base4)]"}"
+                  style="background: ${bg}; color: ${pickTextColor(bg)}"
+                  title=${isInPalette ? `${v} \u2014 ${palette![v]}` : `${v}`}
+                  @click=${() => handlers.onBimpBrushSelect(v)}>
+                  ${v}
+                </button>
+                ${isInPalette
+                  ? html`<input
+                      type="color"
+                      .value=${palette![v]}
+                      @input=${(e: Event) =>
+                        handlers.onBimpPaletteColorChange(
+                          v,
+                          (e.target as HTMLInputElement).value
+                        )}
+                      title="Edit color ${v}"
+                      class="absolute -bottom-1 -right-1 w-[0.9rem] h-[0.9rem] p-0 border border-[color:var(--base1)] rounded-[2px] cursor-pointer bg-transparent" />`
+                  : ""}
+              </div>`;
+            })}
+            <button
+              class="flex items-center justify-center w-[2rem] h-[2rem] text-[0.9rem] rounded-[3px] cursor-pointer bg-[var(--base2)] border border-[color:var(--base4)] text-[color:var(--base10)] hover:bg-[var(--base3)] hover:text-[color:var(--base13)]"
+              title="Add a palette color"
+              @click=${() => handlers.onBimpPaletteAdd()}>
+              +
+            </button>
           </div>
 
           <div
@@ -427,14 +486,6 @@ function bimpModal(edit: BimpEditState, handlers: ViewHandlers) {
               </div>`
             )}
           </div>
-
-          ${palette
-            ? ""
-            : html`<p
-                class="text-[0.72rem] text-[color:var(--base7)] italic">
-                No palette defined. Pass a 4th arg like
-                <code class="font-mono">["#f00", "#0f0"]</code> to set colors.
-              </p>`}
         </div>
 
         <div

@@ -16,6 +16,8 @@ import type { SyntaxNode } from "@lezer/common";
 import type { EditorState } from "@codemirror/state";
 
 export interface BimpEditTarget {
+  exprFrom: number;
+  exprTo: number;
   arrayFrom: number;
   arrayTo: number;
   width: number;
@@ -95,6 +97,8 @@ function parseBimpNew(node: SyntaxNode, state: EditorState): BimpEditTarget | nu
   }
 
   return {
+    exprFrom: node.from,
+    exprTo: node.to,
     arrayFrom: args[2].from,
     arrayTo: args[2].to,
     width,
