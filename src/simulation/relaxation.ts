@@ -74,14 +74,14 @@ export function yarnRelaxation(
     }
     if (mag === 0) return;
 
-    const CN1 = nodes[seg2.source];
-    const CN2 = nodes[seg2.target];
-
     const f1 = Vec3.scale(Vec3.normalize(B1), mag);
     const f2 = Vec3.scale(Vec3.normalize(B2), -mag);
 
-    CN1.f = Vec3.add(CN1.f, f1);
-    CN2.f = Vec3.add(CN2.f, f2);
+
+    nodes[seg2.source].f = Vec3.add(nodes[seg2.source].f, f1);
+    nodes[seg2.target].f = Vec3.add(nodes[seg2.target].f, f2);
+    nodes[seg1.source].f = Vec3.subtract(nodes[seg1.source].f, f1);
+    nodes[seg3.target].f = Vec3.subtract(nodes[seg3.target].f, f2);
   }
 
   function updatePositions(nodes: NodeType[]): void {

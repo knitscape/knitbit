@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import { Vec2 } from "../math/Vec2";
 import { Vec3 } from "../math/Vec3";
+import { Op } from "../shared/opData";
 
 // ─── Layout: convert topology nodes to 3D positions ──────────────────────────
 //
@@ -64,7 +65,12 @@ export function layoutNodes(
       posMap.set(key, physIdx);
       nodeMap[i] = physIdx;
 
-      const z = topo.bed === "front" ? BED_OFFSET : -BED_OFFSET;
+      // Only pin the node to a bed if the op at its needle is a knit. Tucks,
+      // misses start at z=0
+      const needle = Math.floor(topo.gridI / 2);
+      const op = program.ops.pixel(needle, topo.row);
+      const isKnit = op === Op.FKNIT || op === Op.BKNIT;
+      const z = isKnit ? (topo.bed === "front" ? BED_OFFSET : -BED_OFFSET) : 0;
       const numContacts = topo.stackSize;
       const offset = Math.sqrt(
         (numContacts * YARN_RADIUS * YARN_RADIUS) / 2
@@ -123,7 +129,8 @@ export function computeYarnPathSpline(
       restLength: undefined,
     });
 
-    for (let k = 1; k < nodeIndices.length; k++) {
+
+    for (let k = 0; k < nodeIndices.length; k++) {
       const topoIdx = nodeIndices[k];
       const physIdx = nodeMap[topoIdx];
       const topo = topology.nodes[topoIdx];
