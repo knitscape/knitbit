@@ -54,15 +54,36 @@ export function createCamera3D() {
     if (e.button !== 0) return;
     const startAzimuth = azimuth;
     const startPolar = polar;
+    const startTarget = [...target];
     const startX = e.clientX;
     const startY = e.clientY;
+    const panning = e.shiftKey;
 
     function move(e: PointerEvent): void {
-      azimuth = startAzimuth - (e.clientX - startX) * 0.005;
-      polar = Math.max(
-        0.05,
-        Math.min(Math.PI - 0.05, startPolar - (e.clientY - startY) * 0.005)
-      );
+      if (panning) {
+        const dx = (e.clientX - startX) * radius * 0.0008;
+        const dy = (e.clientY - startY) * radius * 0.0008;
+        const sa = Math.sin(startAzimuth);
+        const ca = Math.cos(startAzimuth);
+        const sp = Math.sin(startPolar);
+        const cp = Math.cos(startPolar);
+        const rightX = ca;
+        const rightZ = -sa;
+        const upX = -sa * cp;
+        const upY = sp;
+        const upZ = -ca * cp;
+        target = [
+          startTarget[0] - rightX * dx + upX * dy,
+          startTarget[1] + upY * dy,
+          startTarget[2] - rightZ * dx + upZ * dy,
+        ];
+      } else {
+        azimuth = startAzimuth - (e.clientX - startX) * 0.005;
+        polar = Math.max(
+          0.05,
+          Math.min(Math.PI - 0.05, startPolar - (e.clientY - startY) * 0.005)
+        );
+      }
       update();
     }
 
