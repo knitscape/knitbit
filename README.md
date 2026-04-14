@@ -1,26 +1,62 @@
-# knitstack
+# knitbit
 
-## Data structure
+A tool for tinkering with knitting programs. Write some JavaScript to manipulate
+bitmaps into a program of knit ops and get a live 3d visualization of the knit
+topology.
 
-The final knitting program will consist of:
+## Run
 
-- a bitmap of width m (columns) and height n (rows) where each cell is assigned
-  one of the base knitting actions
-  - miss (yarn feeder moves past a needle, no needle action occurs)
-  - front bed knit (yarn is knit on the front bed)
-  - front bed tuck (yarn is laid into a needle on the front bed, but not knit)
-  - back bed knit (yarn is knit on the back bed)
-  - back bed tuck (yarn is laid into a needle on the back bed, but not knit)
-  - transfer front to back (a loop is moved from the front bed needle to the
-    back bed needle, effectively merging with any loop(s) already on that
-    needle)
-  - transfer back to front (a loop is moved from the back bed needle to the
-    front bed needle, effectively merging with any loop(s) already on that
-    needle)
-- a set of control columns of height n which contains some additional metadata
-  related to machine execution. the bare minimum for the purposes of this tool
-  are:
-  - yarn feeder index (which yarn is knitting in that row)
-  - carriage pass direction (the direction the carriage moves in that row)
-  - racking (the relative offset between the beds, which determines which needle
-    a transferred loop will end up on)
+```sh
+npm install
+npm run dev
+```
+
+Vite will print a local URL; open it in a browser.
+
+## How it works
+
+Your script is evaluated with two globals — `Bimp` (a bitmap class) and `Op` (a
+stitch-operation enum) — and returns a program description:
+
+```js
+return {
+  ops, // Bimp of Op values (width × height)
+  yarnFeeder, // per-row feeder id, or null for transfer-only rows
+  palette, // CSS colors indexed by feeder id - 1
+  racking, // optional per-row bed offset
+  direction, // optional "left"|"right" per row; inferred if omitted
+};
+```
+
+See the in-app help pane (top-right `?`) for the full op set, return value, and
+keyboard shortcuts.
+
+## Features
+
+- **Editor** — CodeMirror 6 with JavaScript highlighting, autocomplete, folding,
+  and inline widgets.
+- **Bitmap editor** — a `✎` badge appears on each
+  `new Bimp(w, h, [...], [palette])` literal. Click it to paint the bitmap
+  visually: brush / line / rect / flood tools, shift arrows, resize, zoom, and
+  editable palette labels.
+- **Auto-run** — toggle to re-execute the script on every edit (typing, paints,
+  resizes) with a debounced preview.
+- **Chart + 3D preview** — click a chart cell to scrub the simulation to that
+  stitch.
+- **Script workspace** — scripts auto-save to `localStorage` under editable
+  names; bundled examples are read-only until you edit them (then they fork into
+  `Untitled`).
+
+## Layout
+
+- `src/index.ts` — app state, handlers, boot.
+- `src/view.ts` — lit-html view / modals.
+- `src/editor/` — CodeMirror setup, bitmap widget, completions, theme.
+- `src/simulation/` — topology and relaxation for the 3D preview.
+- `src/shared/` — `Bimp` class and `Op` enum.
+- `src/examples/*.js` — bundled example scripts (plain JS files, loaded via
+  `import.meta.glob` as raw text).
+
+## License
+
+MIT
